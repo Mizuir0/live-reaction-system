@@ -1,0 +1,241 @@
+import React, { useEffect, useRef } from 'react';
+import type { FaceLandmarkerResult } from '@mediapipe/tasks-vision';
+import type { ReactionStates, ReactionEvents, DetectionDebugInfo } from '../types/reactions';
+
+interface DebugOverlayProps {
+  videoRef: React.RefObject<HTMLVideoElement>;
+  detectionResult: FaceLandmarkerResult | null;
+  states: ReactionStates;
+  events: ReactionEvents;
+  debugInfo: DetectionDebugInfo;
+  showLandmarks?: boolean; // ランドマーク表示のオン/オフ
+}
+
+/**
+ * デバッグ用オーバーレイコンポーネント
+ * 顔のランドマークとリアクション検出結果を表示
+ */
+const DebugOverlay: React.FC<DebugOverlayProps> = ({
+  videoRef,
+  detectionResult,
+  states,
+  events,
+  debugInfo,
+  showLandmarks = false // デフォルトは非表示
+}) => {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  /**
+   * ランドマークを描画
+   */
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    const video = videoRef.current;
+
+    if (!canvas || !video) return;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    // Canvas サイズをビデオに合わせる
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+
+    // クリア
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // showLandmarks が false の場合は描画しない
+    if (!showLandmarks) return;
+
+    // ランドマークの描画
+    if (detectionResult && detectionResult.faceLandmarks && detectionResult.faceLandmarks.length > 0) {
+      const landmarks = detectionResult.faceLandmarks[0];
+
+      // ランドマークを点で描画
+      ctx.fillStyle = '#00ff00';
+      landmarks.forEach((landmark) => {
+        const x = landmark.x * canvas.width;
+        const y = landmark.y * canvas.height;
+        ctx.beginPath();
+        ctx.arc(x, y, 2, 0, 2 * Math.PI);
+        ctx.fill();
+      });
+
+      // 重要なポイントを強調（鼻の先端、口角など）
+      ctx.fillStyle = '#ff0000';
+      ctx.strokeStyle = '#ff0000';
+      ctx.lineWidth = 2;
+
+      // 鼻の先端（index 1）
+      const noseTip = landmarks[1];
+      const noseX = noseTip.x * canvas.width;
+      const noseY = noseTip.y * canvas.height;
+      ctx.beginPath();
+      ctx.arc(noseX, noseY, 5, 0, 2 * Math.PI);
+      ctx.fill();
+
+      // 口角（左右）
+      const mouthLeft = landmarks[61];
+      const mouthRight = landmarks[291];
+      const mouthLeftX = mouthLeft.x * canvas.width;
+      const mouthLeftY = mouthLeft.y * canvas.height;
+      const mouthRightX = mouthRight.x * canvas.width;
+      const mouthRightY = mouthRight.y * canvas.height;
+
+      ctx.beginPath();
+      ctx.arc(mouthLeftX, mouthLeftY, 4, 0, 2 * Math.PI);
+      ctx.arc(mouthRightX, mouthRightY, 4, 0, 2 * Math.PI);
+      ctx.fill();
+    }
+  }, [detectionResult, videoRef, showLandmarks]);
+
+  return (
+    <div style={styles.container}>
+      {/* ランドマーク描画用 Canvas */}
+      <canvas
+        ref={canvasRef}
+        style={styles.canvas}
+      />
+
+      {/* 検出情報パネル */}
+      <div style={styles.infoPanel}>
+        <h3 style={styles.panelTitle}>🔍 検出情報（デバッグ）</h3>
+        
+        {/* 基本情報 */}
+        <div style={styles.section}>
+          <div style={styles.infoRow}>
+            <span style={styles.label}>顔検出:</span>
+            <span style={{
+              ...styles.value,
+              color: debugInfo.faceDetected ? '#4caf50' : '#f44336'
+            }}>
+              {debugInfo.faceDetected ? '✅ 検出中' : '❌ 未検出'}
+            </span>
+          </div>
+          <div style={styles.infoRow}>
+            <span style={styles.label}>ランドマーク数:</span>
+            <span style={styles.value}>{debugInfo.landmarkCount}</span>
+          </div>
+        </div>
+
+        {/* ステート型リアクション */}
+        <div style={styles.section}>
+          <h4 style={styles.sectionTitle}>ステート型</h4>
+          <div style={styles.infoRow}>
+            <span style={styles.label}>isSmiling:</span>
+            <span style={{
+              ...styles.value,
+              color: states.isSmiling ? '#4caf50' : '#999',
+              fontWeight: states.isSmiling ? 'bold' : 'normal'
+            }}>
+              {states.isSmiling ? '😊 TRUE' : 'false'}
+            </span>
+          </div>
+          <div style={styles.debugValues}>
+            <span style={styles.debugLabel}>左口角: {debugInfo.smileLeftValue.toFixed(3)}</span>
+            <span style={styles.debugLabel}>右口角: {debugInfo.smileRightValue.toFixed(3)}</span>
+          </div>
+        </div>
+
+        {/* イベント型リアクション */}
+        <div style={styles.section}>
+          <h4 style={styles.sectionTitle}>イベント型（1秒間）</h4>
+          <div style={styles.infoRow}>
+            <span style={styles.label}>nod（頷き）:</span>
+            <span style={{
+              ...styles.value,
+              color: events.nod > 0 ? '#4caf50' : '#999',
+              fontWeight: events.nod > 0 ? 'bold' : 'normal',
+              fontSize: events.nod > 0 ? '18px' : '14px'
+            }}>
+              {events.nod > 0 ? `✅ ${events.nod}回` : '0回'}
+            </span>
+          </div>
+          <div style={styles.debugValues}>
+            <span style={styles.debugLabel}>頭Y座標: {debugInfo.headY.toFixed(3)}</span>
+            <span style={styles.debugLabel}>閾値: {debugInfo.headYThreshold.toFixed(3)}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const styles: { [key: string]: React.CSSProperties } = {
+  container: {
+    position: 'fixed',
+    top: 0,
+    left: 0,
+    width: '100%',
+    height: '100%',
+    pointerEvents: 'none',
+    zIndex: 100
+  },
+  canvas: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    width: '100%',
+    height: '100%',
+    objectFit: 'contain'
+  },
+  infoPanel: {
+    position: 'absolute',
+    top: '10px',
+    right: '10px',
+    backgroundColor: 'rgba(0, 0, 0, 0.85)',
+    color: 'white',
+    padding: '15px',
+    borderRadius: '8px',
+    minWidth: '280px',
+    maxWidth: '350px',
+    fontSize: '13px',
+    pointerEvents: 'auto'
+  },
+  panelTitle: {
+    margin: '0 0 12px 0',
+    fontSize: '16px',
+    fontWeight: 'bold',
+    borderBottom: '2px solid #555',
+    paddingBottom: '8px'
+  },
+  section: {
+    marginBottom: '15px',
+    paddingBottom: '10px',
+    borderBottom: '1px solid #444'
+  },
+  sectionTitle: {
+    margin: '0 0 8px 0',
+    fontSize: '14px',
+    fontWeight: 'bold',
+    color: '#ffa726'
+  },
+  infoRow: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: '6px'
+  },
+  label: {
+    color: '#bbb',
+    fontSize: '13px'
+  },
+  value: {
+    fontSize: '14px',
+    fontWeight: '500'
+  },
+  debugValues: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '4px',
+    marginTop: '6px',
+    paddingLeft: '10px'
+  },
+  debugLabel: {
+    fontSize: '11px',
+    color: '#888',
+    fontFamily: 'monospace'
+  }
+};
+
+export default DebugOverlay;

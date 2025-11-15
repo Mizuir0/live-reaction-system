@@ -5,9 +5,10 @@ import { useCamera } from '../hooks/useCamera';
 import { useMediaPipe } from '../hooks/useMediaPipe';
 import { useReactionDetection } from '../hooks/useReactionDetection';
 import DebugOverlay from './DebugOverlay';
-
+import type { ReactionStates, ReactionEvents } from '../types/reactions';
+import { useWebSocket } from '../hooks/useWebSockets';
 interface ViewingScreenProps {
-  videoId: string;
+  videoId: string | undefined;
   userId: string;
 }
 
@@ -16,23 +17,48 @@ interface ViewingScreenProps {
  * YouTube プレイヤー、Canvas エフェクト領域、ステータス表示を含む
  */
 const ViewingScreen: React.FC<ViewingScreenProps> = ({ videoId, userId }) => {
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
   const [playerReady, setPlayerReady] = useState(false);
   const [showDebug, setShowDebug] = useState(true);
   const [showLandmarks, setShowLandmarks] = useState(false); // ランドマーク表示
   const detectionIntervalRef = useRef<number | null>(null);
+  const sendIntervalRef = useRef<number | null>(null);
+  
+  // 最新のstatesとeventsを保持するref
+  const statesRef = useRef<ReactionStates>({
+    isSmiling: false,
+    isSurprised: false,
+    isConcentrating: false,
+    isHandUp: false
+  });
+  const eventsRef = useRef<ReactionEvents>({
+    nod: 0,
+    shakeHead: 0,
+    swayVertical: 0,
+    swayHorizontal: 0,
+    cheer: 0,
+    clap: 0
+  });
 
   // カスタムフック
   const { videoRef, isReady: cameraReady, error: cameraError, requestCamera } = useCamera();
   const { isReady: mediaPipeReady, detectFace, lastResult } = useMediaPipe();
   const { states, events, debugInfo, updateReactions, resetEvents } = useReactionDetection();
-
+  const { isConnected: wsConnected, error: wsError, sendReactionData, lastResponse } = useWebSocket(userId);
   /**
    * カメラアクセスをリクエスト
    */
   useEffect(() => {
     requestCamera();
   }, []);
+
+  /**
+   * states と events が変更されたら ref を更新
+   */
+  useEffect(() => {
+    statesRef.current = states;
+    eventsRef.current = events;
+  }, [states, events]);
 
   /**
    * リアクション検出ループ（0.1秒ごと = 10fps）
@@ -42,7 +68,7 @@ const ViewingScreen: React.FC<ViewingScreenProps> = ({ videoId, userId }) => {
       return;
     }
 
-    console.log('リアクション検出ループを開始します');
+    console.log('✅ リアクション検出ループを開始します');
 
     const detectInterval = window.setInterval(() => {
       if (videoRef.current && videoRef.current.readyState >= 2) {
@@ -56,10 +82,10 @@ const ViewingScreen: React.FC<ViewingScreenProps> = ({ videoId, userId }) => {
     return () => {
       if (detectionIntervalRef.current) {
         clearInterval(detectionIntervalRef.current);
-        console.log('リアクション検出ループを停止しました');
+        console.log('⏹️ リアクション検出ループを停止しました');
       }
     };
-  }, [cameraReady, mediaPipeReady, detectFace, updateReactions]);
+  }, [cameraReady, mediaPipeReady]); // detectFace, updateReactionsを依存配列から削除
 
   /**
    * イベントカウンターのリセット（1秒ごと）
@@ -72,6 +98,38 @@ const ViewingScreen: React.FC<ViewingScreenProps> = ({ videoId, userId }) => {
 
     return () => clearInterval(resetInterval);
   }, [resetEvents, events]);
+
+  /**
+   * リアクションデータの送信（1秒ごと）
+   */
+  useEffect(() => {
+    if (!wsConnected) {
+      console.log('⚠️ WebSocket未接続のため送信スキップ');
+      return;
+    }
+
+    console.log('📡 リアクションデータ送信ループを開始');
+
+    const sendInterval = window.setInterval(() => {
+      // refから最新の値を取得
+      const currentStates = statesRef.current;
+      const currentEvents = eventsRef.current;
+      
+      sendReactionData({
+        states: currentStates,
+        events: currentEvents
+      });
+    }, 1000); // 1秒ごと
+
+    sendIntervalRef.current = sendInterval;
+
+    return () => {
+      if (sendIntervalRef.current) {
+        clearInterval(sendIntervalRef.current);
+        console.log('📡 リアクションデータ送信ループを停止');
+      }
+    };
+  }, [wsConnected, sendReactionData]); // wsConnectedとsendReactionDataのみ依存
 
   useEffect(() => {
     // Canvas の初期化（後のステップで描画処理を追加）
@@ -130,7 +188,7 @@ const ViewingScreen: React.FC<ViewingScreenProps> = ({ videoId, userId }) => {
   };
 
   // リアクション検出が有効かどうか
-  const isReactionActive = cameraReady && mediaPipeReady;
+  const isReactionActive = cameraReady && mediaPipeReady && wsConnected;
 
   return (
     <div style={styles.container}>
@@ -153,8 +211,8 @@ const ViewingScreen: React.FC<ViewingScreenProps> = ({ videoId, userId }) => {
         {/* YouTube プレイヤー */}
         <div style={styles.playerWrapper}>
           <YouTube
-            videoId={videoId}
-            opts={opts}
+            videoId={videoId ?? ''}
+            opts={opts as YouTubeProps['opts']}
             onReady={onPlayerReady}
             onStateChange={onPlayerStateChange}
             style={styles.player}
@@ -209,6 +267,15 @@ const ViewingScreen: React.FC<ViewingScreenProps> = ({ videoId, userId }) => {
               {mediaPipeReady ? '✓' : '...'}
             </span>
           </div>
+          <div style={styles.statusItem}>
+            <span style={styles.statusLabel}>WebSocket:</span>
+            <span style={{
+              ...styles.statusValue,
+              color: wsConnected ? '#4caf50' : wsError ? '#f44336' : '#ff9800'
+            }}>
+              {wsConnected ? '✓' : wsError ? '✗' : '...'}
+            </span>
+          </div>
         </div>
 
         <div style={styles.statusRight}>
@@ -245,17 +312,26 @@ const ViewingScreen: React.FC<ViewingScreenProps> = ({ videoId, userId }) => {
       {/* エラー表示 */}
       {cameraError && (
         <div style={styles.errorBanner}>
-          ⚠️ {cameraError}
+          ⚠️ カメラ: {cameraError}
+        </div>
+      )}
+      {wsError && !wsConnected && (
+        <div style={{...styles.errorBanner, top: '55%'}}>
+          ⚠️ WebSocket: {wsError}
         </div>
       )}
 
       {/* デバッグ情報（開発用） */}
       <div style={styles.debugInfo}>
         <p style={styles.debugText}>
-          <strong>Step 2 完了:</strong> カメラ取得 + MediaPipe + リアクション検出（isSmiling, nod）
+          <strong>Step 3 完了:</strong> WebSocket通信 + リアクションデータ送信（1秒ごと）
         </p>
         <p style={styles.debugText}>
-          <strong>次のステップ:</strong> WebSocket通信の実装
+          <strong>接続状態:</strong> {wsConnected ? '✅ 接続中' : '❌ 未接続'}
+          {lastResponse && lastResponse.type === 'echo' && ' | 📥 Echoレスポンス受信'}
+        </p>
+        <p style={styles.debugText}>
+          <strong>次のステップ:</strong> サーバー側の集約ロジック + エフェクト生成
         </p>
       </div>
     </div>

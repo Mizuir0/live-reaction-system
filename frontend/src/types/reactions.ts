@@ -41,7 +41,7 @@ export interface DetectionDebugInfo {
 // エフェクト指示データ（サーバーからの受信）
 export interface EffectInstruction {
   type: 'effect';
-  effectType: 'sparkle' | 'wave' | 'clapping_icons' | 'excitement' | 'bounce' | 'cheer' | 'shimmer' | 'focus';
+  effectType: 'sparkle' | 'wave' | 'clapping_icons' | 'excitement' | 'bounce' | 'cheer' | 'shimmer' | 'focus' | 'groove';
   intensity: number;
   durationMs: number;
   timestamp: number;

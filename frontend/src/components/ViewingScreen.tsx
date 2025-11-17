@@ -4,6 +4,7 @@ import type { YouTubeProps } from 'react-youtube';
 import { useCamera } from '../hooks/useCamera';
 import { useMediaPipe } from '../hooks/useMediaPipe';
 import { useReactionDetection } from '../hooks/useReactionDetection';
+import { useAudioDetection } from '../hooks/useAudioDetection';
 import { useWebSocket } from '../hooks/useWebSockets';
 import { useEffectRenderer } from '../hooks/useEffectRenderer';
 import DebugOverlay from './DebugOverlay';
@@ -45,6 +46,13 @@ const ViewingScreen: React.FC<ViewingScreenProps> = ({ videoId, userId }) => {
   const { videoRef, isReady: cameraReady, error: cameraError, requestCamera } = useCamera();
   const { isReady: mediaPipeReady, detectAll, lastResult } = useMediaPipe();
   const { states, events, debugInfo, updateReactions, resetEvents } = useReactionDetection();
+  const {
+    events: audioEvents,
+    debugInfo: audioDebugInfo,
+    resetEvents: resetAudioEvents,
+    startAudio,
+    stopAudio
+  } = useAudioDetection();
   const { isConnected: wsConnected, error: wsError, sendReactionData, currentEffect } = useWebSocket(userId);
 
   // エフェクトレンダラー
@@ -57,12 +65,29 @@ const ViewingScreen: React.FC<ViewingScreenProps> = ({ videoId, userId }) => {
   }, []);
 
   /**
+   * マイクアクセスをリクエスト
+   */
+  useEffect(() => {
+    startAudio();
+
+    return () => {
+      stopAudio();
+    };
+  }, []);
+
+  /**
    * states と events が変更されたら ref を更新
+   * 視覚イベントと音声イベントをマージ
    */
   useEffect(() => {
     statesRef.current = states;
-    eventsRef.current = events;
-  }, [states, events]);
+    // 視覚検出イベントと音声検出イベントをマージ
+    eventsRef.current = {
+      ...events,
+      cheer: audioEvents.cheer,
+      clap: audioEvents.clap
+    };
+  }, [states, events, audioEvents]);
 
   /**
    * リアクション検出ループ（0.1秒ごと = 10fps）
@@ -96,12 +121,13 @@ const ViewingScreen: React.FC<ViewingScreenProps> = ({ videoId, userId }) => {
    */
   useEffect(() => {
     const resetInterval = setInterval(() => {
-      console.log('イベントカウンターをリセット - nod:', events.nod);
+      console.log('イベントカウンターをリセット - nod:', events.nod, 'cheer:', audioEvents.cheer, 'clap:', audioEvents.clap);
       resetEvents();
+      resetAudioEvents();
     }, 1000);
 
     return () => clearInterval(resetInterval);
-  }, [resetEvents, events]);
+  }, [resetEvents, resetAudioEvents, events, audioEvents]);
 
   /**
    * リアクションデータの送信（1秒ごと）
@@ -229,8 +255,9 @@ const ViewingScreen: React.FC<ViewingScreenProps> = ({ videoId, userId }) => {
             videoRef={videoRef as unknown as React.RefObject<HTMLVideoElement>}
             detectionResult={lastResult}
             states={states}
-            events={events}
+            events={{...events, cheer: audioEvents.cheer, clap: audioEvents.clap}}
             debugInfo={debugInfo}
+            audioDebugInfo={audioDebugInfo}
             showLandmarks={showLandmarks}
             currentEffect={currentEffect}
           />
@@ -279,6 +306,15 @@ const ViewingScreen: React.FC<ViewingScreenProps> = ({ videoId, userId }) => {
               color: wsConnected ? '#4caf50' : wsError ? '#f44336' : '#ff9800'
             }}>
               {wsConnected ? '✓' : wsError ? '✗' : '...'}
+            </span>
+          </div>
+          <div style={styles.statusItem}>
+            <span style={styles.statusLabel}>🎤 Audio:</span>
+            <span style={{
+              ...styles.statusValue,
+              color: audioDebugInfo.isActive ? '#4caf50' : audioDebugInfo.error ? '#f44336' : '#ff9800'
+            }}>
+              {audioDebugInfo.isActive ? '✓' : audioDebugInfo.error ? '✗' : '...'}
             </span>
           </div>
         </div>

@@ -564,6 +564,157 @@ export const useEffectRenderer = ({ canvasRef, currentEffect }: UseEffectRendere
   };
 
   /**
+   * Clapping Icons効果（拍手アイコン）
+   * 画面上を上昇する拍手アイコン
+   */
+  const renderClappingIcons = (ctx: CanvasRenderingContext2D, width: number, height: number, intensity: number, _elapsed: number) => {
+    ctx.save();
+
+    const time = performance.now() / 1000;
+
+    // アイコンの数（intensity に応じて 5~20個）
+    const iconCount = Math.floor(5 + intensity * 15);
+
+    for (let i = 0; i < iconCount; i++) {
+      // ランダムな横位置（ただしシード値を使って安定した位置）
+      const seed = i * 123.456;
+      const x = (Math.sin(seed) * 0.5 + 0.5) * width;
+
+      // 下から上に上昇
+      const baseY = height + 50;
+      const riseSpeed = 150 + (i % 3) * 50; // 上昇速度
+      const y = baseY - ((time * riseSpeed + i * 100) % (height + 150));
+
+      // サイズ（intensity で変化）
+      const size = 30 + intensity * 20 + Math.sin(time * 3 + i) * 5;
+
+      // 透明度（上に行くほど薄くなる）
+      const fadeStart = height * 0.3;
+      const alpha = y > fadeStart ? 1.0 : Math.max(0, y / fadeStart);
+
+      ctx.globalAlpha = alpha * (0.7 + intensity * 0.3);
+
+      // 拍手の絵文字を描画
+      ctx.font = `${size}px Arial`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+
+      // 影をつける
+      ctx.shadowBlur = 8;
+      ctx.shadowColor = 'rgba(255, 215, 0, 0.6)';
+      ctx.shadowOffsetX = 2;
+      ctx.shadowOffsetY = 2;
+
+      // 絵文字を描画（拍手）
+      ctx.fillText('👏', x, y);
+    }
+
+    ctx.restore();
+
+    // intensityが高い時は画面下部にゴールドのグロー
+    if (intensity > 0.6) {
+      ctx.save();
+      ctx.globalAlpha = (intensity - 0.6) * 0.5;
+
+      const gradient = ctx.createLinearGradient(0, height - 100, 0, height);
+      gradient.addColorStop(0, 'rgba(255, 215, 0, 0)');
+      gradient.addColorStop(1, 'rgba(255, 215, 0, 0.3)');
+
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, height - 100, width, 100);
+
+      ctx.restore();
+    }
+  };
+
+  /**
+   * Groove効果（横揺れ）
+   * 左右に流れる波とリズミカルなパーティクル
+   */
+  const renderGroove = (ctx: CanvasRenderingContext2D, width: number, height: number, intensity: number, _elapsed: number) => {
+    ctx.save();
+
+    const time = performance.now() / 1000;
+
+    // 左右に流れる波（3本の正弦波）
+    const waveCount = 3;
+    for (let i = 0; i < waveCount; i++) {
+      const yPos = height * (0.25 + i * 0.25);
+      const amplitude = 30 + intensity * 40; // 波の高さ
+      const frequency = 0.02; // 波の細かさ
+      const speed = time * 2 + i * 0.5; // 左右に流れる速度
+
+      ctx.beginPath();
+      ctx.strokeStyle = `rgba(255, 140, 0, ${0.3 + intensity * 0.4})`; // オレンジ色
+      ctx.lineWidth = 3 + intensity * 3;
+      ctx.shadowBlur = 15;
+      ctx.shadowColor = 'rgba(255, 140, 0, 0.6)';
+
+      for (let x = 0; x < width; x += 5) {
+        const y = yPos + Math.sin((x * frequency) + speed) * amplitude;
+        if (x === 0) {
+          ctx.moveTo(x, y);
+        } else {
+          ctx.lineTo(x, y);
+        }
+      }
+      ctx.stroke();
+    }
+
+    ctx.shadowBlur = 0;
+
+    // 左右に流れるパーティクル（10~30個）
+    const particleCount = Math.floor(10 + intensity * 20);
+    for (let i = 0; i < particleCount; i++) {
+      const offset = (i / particleCount) * width;
+      const x = (offset + time * 150 + i * 30) % width;
+      const y = height * (0.2 + (i % 3) * 0.3) + Math.sin(time * 3 + i) * 20;
+      const size = 4 + intensity * 6;
+      const alpha = 0.5 + Math.sin(time * 2 + i * 0.5) * 0.3;
+
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = 'rgba(255, 165, 0, 0.8)'; // オレンジゴールド
+      ctx.shadowBlur = 12;
+      ctx.shadowColor = 'rgba(255, 140, 0, 0.8)';
+      ctx.beginPath();
+      ctx.arc(x, y, size, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    ctx.restore();
+
+    // 画面端に左右の脈動するグロー
+    ctx.save();
+    const pulse = Math.sin(time * 2.5) * 0.3 + 0.7;
+
+    // 左端
+    const leftGradient = ctx.createLinearGradient(0, 0, 100, 0);
+    leftGradient.addColorStop(0, `rgba(255, 140, 0, ${(0.3 + intensity * 0.3) * pulse})`);
+    leftGradient.addColorStop(1, 'rgba(255, 140, 0, 0)');
+    ctx.fillStyle = leftGradient;
+    ctx.fillRect(0, 0, 100, height);
+
+    // 右端
+    const rightGradient = ctx.createLinearGradient(width - 100, 0, width, 0);
+    rightGradient.addColorStop(0, 'rgba(255, 140, 0, 0)');
+    rightGradient.addColorStop(1, `rgba(255, 140, 0, ${(0.3 + intensity * 0.3) * pulse})`);
+    ctx.fillStyle = rightGradient;
+    ctx.fillRect(width - 100, 0, 100, height);
+
+    ctx.restore();
+
+    // intensityが高い時は画面全体にリズミカルなフラッシュ
+    if (intensity > 0.7) {
+      const flashAlpha = Math.sin(time * 4) * 0.1 + 0.1;
+      ctx.save();
+      ctx.globalAlpha = flashAlpha * (intensity - 0.7);
+      ctx.fillStyle = 'rgba(255, 200, 100, 0.2)';
+      ctx.fillRect(0, 0, width, height);
+      ctx.restore();
+    }
+  };
+
+  /**
    * アニメーションループ
    */
   const animate = () => {
@@ -608,6 +759,12 @@ export const useEffectRenderer = ({ canvasRef, currentEffect }: UseEffectRendere
             break;
           case 'focus':
             renderFocus(ctx, width, height, effect.intensity, elapsed);
+            break;
+          case 'groove':
+            renderGroove(ctx, width, height, effect.intensity, elapsed);
+            break;
+          case 'clapping_icons':
+            renderClappingIcons(ctx, width, height, effect.intensity, elapsed);
             break;
           default:
             console.warn('未対応のエフェクトタイプ:', effect.effectType);

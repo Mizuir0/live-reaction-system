@@ -208,7 +208,7 @@ class AggregationEngine:
         effect_type = None
         intensity = 0.0
 
-        # 優先順位: cheer > excitement > bounce > shimmer > wave > sparkle > focus
+        # 優先順位: cheer (isHandUp) > excitement > clap > bounce > shimmer > groove > cheer (audio) > wave > sparkle > focus
 
         # 1. cheer（手を上げている）判定
         if ratio_state.get('isHandUp', 0) >= 0.3:
@@ -222,31 +222,49 @@ class AggregationEngine:
             intensity = min(ratio_state['isSurprised'], 1.0)
             print(f"  ✨ Excitement効果発動! (intensity: {intensity:.2f})")
 
-        # 3. bounce（縦揺れ）判定
+        # 3. clap（拍手・音声）判定
+        elif density_event.get('clap', 0) >= 0.15:
+            effect_type = 'clapping_icons'
+            intensity = min(density_event['clap'] / 0.3, 1.0)
+            print(f"  ✨ Clapping Icons効果発動! (intensity: {intensity:.2f})")
+
+        # 4. bounce（縦揺れ）判定
         elif density_event.get('swayVertical', 0) >= 0.2:
             effect_type = 'bounce'
             intensity = min(density_event['swayVertical'], 1.0)
             print(f"  ✨ Bounce効果発動! (intensity: {intensity:.2f})")
 
-        # 4. shimmer（首を横に振る）判定
+        # 5. shimmer（首を横に振る）判定
         elif density_event.get('shakeHead', 0) >= 0.2:
             effect_type = 'shimmer'
             intensity = min(density_event['shakeHead'], 1.0)
             print(f"  ✨ Shimmer効果発動! (intensity: {intensity:.2f})")
 
-        # 5. wave（頷き）判定
+        # 6. groove（横揺れ）判定
+        elif density_event.get('swayHorizontal', 0) >= 0.2:
+            effect_type = 'groove'
+            intensity = min(density_event['swayHorizontal'], 1.0)
+            print(f"  ✨ Groove効果発動! (intensity: {intensity:.2f})")
+
+        # 7. cheer（歓声・音声）判定
+        elif density_event.get('cheer', 0) >= 0.15:
+            effect_type = 'wave'  # 歓声は波のエフェクトを使用
+            intensity = min(density_event['cheer'] / 0.3, 1.0)
+            print(f"  ✨ Wave効果発動（歓声）! (intensity: {intensity:.2f})")
+
+        # 8. wave（頷き）判定
         elif density_event.get('nod', 0) >= 0.3:
             effect_type = 'wave'
             intensity = min(density_event['nod'] / 0.5, 1.0)
             print(f"  ✨ Wave効果発動! (intensity: {intensity:.2f})")
 
-        # 6. sparkle（笑顔）判定
+        # 9. sparkle（笑顔）判定
         elif ratio_state.get('isSmiling', 0) >= 0.35:
             effect_type = 'sparkle'
             intensity = min(ratio_state['isSmiling'], 1.0)
             print(f"  ✨ Sparkle効果発動! (intensity: {intensity:.2f})")
 
-        # 7. focus（集中）判定
+        # 10. focus（集中）判定
         elif ratio_state.get('isConcentrating', 0) >= 0.4:
             effect_type = 'focus'
             intensity = min(ratio_state['isConcentrating'], 1.0)

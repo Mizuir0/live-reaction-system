@@ -63,6 +63,13 @@ export const useReactionDetection = (): UseReactionDetectionReturn => {
   const swayDownStartTime = useRef<number>(0);
   const swayState = useRef<'neutral' | 'down'>('neutral');
 
+  // 横揺れ検出用の状態管理
+  const swayXHistory = useRef<number[]>([]);
+  const prevSwayX = useRef<number>(0);
+  const lastSwayHorizontalTime = useRef<number>(0);
+  const swayHorizontalStartTime = useRef<number>(0);
+  const swayHorizontalState = useRef<'neutral' | 'left' | 'right'>('neutral');
+
   /**
    * 笑顔検出（ステート型）
    */
@@ -362,6 +369,76 @@ export const useReactionDetection = (): UseReactionDetectionReturn => {
   };
 
   /**
+   * 体の横揺れ検出（イベント型）- 両肩の中心点を使用
+   * 左右方向の周期的な動きを検出（音楽に合わせた体の揺れなど）
+   */
+  const detectSwayHorizontal = (poseLandmarks: any): void => {
+    if (!poseLandmarks || poseLandmarks.length === 0) return;
+
+    // Pose landmark indices: 11=左肩, 12=右肩
+    const leftShoulder = poseLandmarks[0][11];
+    const rightShoulder = poseLandmarks[0][12];
+
+    if (!leftShoulder || !rightShoulder) return;
+
+    // 両肩の中心点のX座標を計算
+    const shoulderCenterX = (leftShoulder.x + rightShoulder.x) / 2;
+
+    // X座標の履歴を保持（最新15フレーム = 約1.5秒）
+    swayXHistory.current.push(shoulderCenterX);
+    if (swayXHistory.current.length > 15) {
+      swayXHistory.current.shift();
+    }
+
+    // 履歴が十分に溜まっていない場合は終了
+    if (swayXHistory.current.length < 8) {
+      prevSwayX.current = shoulderCenterX;
+      return;
+    }
+
+    // 移動平均を計算
+    const avgX = swayXHistory.current.reduce((a, b) => a + b, 0) / swayXHistory.current.length;
+    const deltaFromPrev = avgX - prevSwayX.current;
+    prevSwayX.current = avgX;
+
+    // 閾値設定（横方向の動き）
+    const HORIZONTAL_MOVEMENT_THRESHOLD = 0.008; // 横方向の動き検出閾値
+    const TIMEOUT_MS = 3000; // 3秒でタイムアウト
+    const currentTime = performance.now();
+
+    // タイムアウトチェック
+    if (swayHorizontalState.current !== 'neutral') {
+      const stateDuration = currentTime - swayHorizontalStartTime.current;
+      if (stateDuration > TIMEOUT_MS) {
+        swayHorizontalState.current = 'neutral';
+        return;
+      }
+    }
+
+    // 状態遷移の検出（左右の動き）
+    if (swayHorizontalState.current === 'neutral' && Math.abs(deltaFromPrev) > HORIZONTAL_MOVEMENT_THRESHOLD) {
+      const timeSinceLastSway = currentTime - lastSwayHorizontalTime.current;
+
+      // 0.3秒以上経過していればカウント
+      if (timeSinceLastSway > 300) {
+        setEvents(prev => ({ ...prev, swayHorizontal: prev.swayHorizontal + 1 }));
+        console.log('✅ 横揺れ検出！- 横移動:', deltaFromPrev.toFixed(4));
+        lastSwayHorizontalTime.current = currentTime;
+      }
+
+      // 左右どちらに動いたかで状態を設定
+      swayHorizontalState.current = deltaFromPrev > 0 ? 'right' : 'left';
+      swayHorizontalStartTime.current = currentTime;
+    } else if (swayHorizontalState.current === 'left' && deltaFromPrev > HORIZONTAL_MOVEMENT_THRESHOLD) {
+      // 左から右への動き → neutral に復帰
+      swayHorizontalState.current = 'neutral';
+    } else if (swayHorizontalState.current === 'right' && deltaFromPrev < -HORIZONTAL_MOVEMENT_THRESHOLD) {
+      // 右から左への動き → neutral に復帰
+      swayHorizontalState.current = 'neutral';
+    }
+  };
+
+  /**
    * 手が上がっている検出（ステート型）
    */
   const detectHandUp = (poseLandmarks: any): boolean => {
@@ -436,6 +513,7 @@ export const useReactionDetection = (): UseReactionDetectionReturn => {
     // イベント型: 縦揺れ検出（Poseが必要）
     if (result.pose && result.pose.landmarks && result.pose.landmarks.length > 0) {
       detectSwayVertical(result.pose.landmarks);
+      detectSwayHorizontal(result.pose.landmarks);
     }
 
   }, []);

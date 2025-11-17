@@ -2,12 +2,20 @@ import React, { useEffect, useRef } from 'react';
 import type { MediaPipeResult } from '../hooks/useMediaPipe';
 import type { ReactionStates, ReactionEvents, DetectionDebugInfo, EffectInstruction } from '../types/reactions';
 
+interface AudioDebugInfo {
+  volume: number;
+  volumeThreshold: number;
+  isActive: boolean;
+  error: string | null;
+}
+
 interface DebugOverlayProps {
   videoRef: React.RefObject<HTMLVideoElement>;
   detectionResult: MediaPipeResult;
   states: ReactionStates;
   events: ReactionEvents;
   debugInfo: DetectionDebugInfo;
+  audioDebugInfo?: AudioDebugInfo; // 音声デバッグ情報
   showLandmarks?: boolean; // ランドマーク表示のオン/オフ
   currentEffect?: EffectInstruction | null; // 現在のエフェクト
 }
@@ -22,6 +30,7 @@ const DebugOverlay: React.FC<DebugOverlayProps> = ({
   states,
   events,
   debugInfo,
+  audioDebugInfo,
   showLandmarks = false, // デフォルトは非表示
   currentEffect = null
 }) => {
@@ -213,6 +222,52 @@ const DebugOverlay: React.FC<DebugOverlayProps> = ({
               fontWeight: events.swayVertical > 0 ? 'bold' : 'normal'
             }}>
               {events.swayVertical > 0 ? `${events.swayVertical}回` : '0回'}
+            </span>
+          </div>
+          <div style={styles.infoRow}>
+            <span style={styles.label}>🎶 横揺れ:</span>
+            <span style={{
+              ...styles.value,
+              color: events.swayHorizontal > 0 ? '#4caf50' : '#999',
+              fontWeight: events.swayHorizontal > 0 ? 'bold' : 'normal'
+            }}>
+              {events.swayHorizontal > 0 ? `${events.swayHorizontal}回` : '0回'}
+            </span>
+          </div>
+        </div>
+
+        {/* 音声リアクション */}
+        <div style={styles.section}>
+          <h4 style={styles.sectionTitle}>音声型（Web Audio API）</h4>
+          {audioDebugInfo && (
+            <div style={styles.infoRow}>
+              <span style={styles.label}>🎤 音量:</span>
+              <span style={{
+                ...styles.value,
+                color: audioDebugInfo.volume > audioDebugInfo.volumeThreshold ? '#4caf50' : '#999'
+              }}>
+                {(audioDebugInfo.volume * 100).toFixed(0)}%
+              </span>
+            </div>
+          )}
+          <div style={styles.infoRow}>
+            <span style={styles.label}>🎉 歓声:</span>
+            <span style={{
+              ...styles.value,
+              color: events.cheer > 0 ? '#4caf50' : '#999',
+              fontWeight: events.cheer > 0 ? 'bold' : 'normal'
+            }}>
+              {events.cheer > 0 ? `${events.cheer}回` : '0回'}
+            </span>
+          </div>
+          <div style={styles.infoRow}>
+            <span style={styles.label}>👏 手拍子:</span>
+            <span style={{
+              ...styles.value,
+              color: events.clap > 0 ? '#4caf50' : '#999',
+              fontWeight: events.clap > 0 ? 'bold' : 'normal'
+            }}>
+              {events.clap > 0 ? `${events.clap}回` : '0回'}
             </span>
           </div>
         </div>

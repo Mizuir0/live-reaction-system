@@ -1,12 +1,12 @@
 import { useState, useRef, useCallback } from 'react';
-import type { FaceLandmarkerResult } from '@mediapipe/tasks-vision';
+import type { MediaPipeResult } from './useMediaPipe';
 import type { ReactionStates, ReactionEvents, DetectionDebugInfo } from '../types/reactions';
 
 interface UseReactionDetectionReturn {
   states: ReactionStates;
   events: ReactionEvents;
   debugInfo: DetectionDebugInfo;
-  updateReactions: (result: FaceLandmarkerResult | null) => void;
+  updateReactions: (result: MediaPipeResult | null) => void;
   resetEvents: () => void;
 }
 
@@ -177,10 +177,100 @@ export const useReactionDetection = (): UseReactionDetectionReturn => {
   };
 
   /**
+   * 体の縦揺れ検出（イベント型）- 両肩の中心点を使用
+   * より長い周期（0.5〜2秒）の上下動を検出
+   */
+  const detectSwayVertical = (poseLandmarks: any): void => {
+    if (!poseLandmarks || poseLandmarks.length === 0) return;
+
+    // Pose landmark indices: 11=左肩, 12=右肩
+    const leftShoulder = poseLandmarks[0][11];
+    const rightShoulder = poseLandmarks[0][12];
+
+    if (!leftShoulder || !rightShoulder) return;
+
+    // 両肩の中心点のY座標を計算
+    const shoulderCenterY = (leftShoulder.y + rightShoulder.y) / 2;
+
+    // Y座標の履歴を保持（最新15フレーム = 約1.5秒）
+    swayYHistory.current.push(shoulderCenterY);
+    if (swayYHistory.current.length > 15) {
+      swayYHistory.current.shift();
+    }
+
+    // 履歴が十分に溜まっていない場合は終了
+    if (swayYHistory.current.length < 8) {
+      prevSwayY.current = shoulderCenterY;
+      return;
+    }
+
+    // 移動平均を計算
+    const avgY = swayYHistory.current.reduce((a, b) => a + b, 0) / swayYHistory.current.length;
+    const deltaFromPrev = avgY - prevSwayY.current;
+    prevSwayY.current = avgY;
+
+    // 閾値設定（頷きよりも大きな動き）
+    const DOWN_MOVEMENT_THRESHOLD = 0.01; // 肩の動きに合わせて調整
+    const TIMEOUT_MS = 3000; // 3秒でタイムアウト
+    const currentTime = performance.now();
+
+    // タイムアウトチェック
+    if (swayState.current === 'down') {
+      const downDuration = currentTime - swayDownStartTime.current;
+      if (downDuration > TIMEOUT_MS) {
+        swayState.current = 'neutral';
+        return;
+      }
+    }
+
+    // 状態遷移の検出
+    if (swayState.current === 'neutral' && deltaFromPrev > DOWN_MOVEMENT_THRESHOLD) {
+      const timeSinceLastSway = currentTime - lastSwayTime.current;
+
+      // 0.5秒以上経過していればカウント
+      if (timeSinceLastSway > 500) {
+        setEvents(prev => ({ ...prev, swayVertical: prev.swayVertical + 1 }));
+        console.log('✅ 縦揺れ検出！- 下向き移動:', deltaFromPrev.toFixed(4));
+        lastSwayTime.current = currentTime;
+      }
+
+      swayState.current = 'down';
+      swayDownStartTime.current = currentTime;
+    } else if (swayState.current === 'down' && deltaFromPrev < -DOWN_MOVEMENT_THRESHOLD) {
+      swayState.current = 'neutral';
+    }
+  };
+
+  /**
+   * 手が上がっている検出（ステート型）
+   */
+  const detectHandUp = (poseLandmarks: any): boolean => {
+    if (!poseLandmarks || poseLandmarks.length === 0) return false;
+
+    // Pose landmark indices: 15=左手首, 16=右手首, 11=左肩, 12=右肩
+    const leftWrist = poseLandmarks[0][15];
+    const rightWrist = poseLandmarks[0][16];
+    const leftShoulder = poseLandmarks[0][11];
+    const rightShoulder = poseLandmarks[0][12];
+
+    if (!leftWrist || !rightWrist || !leftShoulder || !rightShoulder) return false;
+
+    // 少なくとも片手が肩より上にあるかチェック
+    const leftHandUp = leftWrist.y < leftShoulder.y - 0.1; // 肩より10%上
+    const rightHandUp = rightWrist.y < rightShoulder.y - 0.1;
+
+    // 手首の visibility もチェック（低すぎる場合は検出しない）
+    const leftVisible = leftWrist.visibility > 0.5;
+    const rightVisible = rightWrist.visibility > 0.5;
+
+    return (leftHandUp && leftVisible) || (rightHandUp && rightVisible);
+  };
+
+  /**
    * リアクションを更新
    */
-  const updateReactions = useCallback((result: FaceLandmarkerResult | null) => {
-    if (!result || !result.faceLandmarks || result.faceLandmarks.length === 0) {
+  const updateReactions = useCallback((result: MediaPipeResult | null) => {
+    if (!result || !result.face || !result.face.faceLandmarks || result.face.faceLandmarks.length === 0) {
       // 顔が検出されない場合
       setStates({
         isSmiling: false,
@@ -197,18 +287,32 @@ export const useReactionDetection = (): UseReactionDetectionReturn => {
     }
 
     // 顔が検出された
+    const faceResult = result.face;
     setDebugInfo(prev => ({
       ...prev,
       faceDetected: true,
-      landmarkCount: result.faceLandmarks[0].length
+      landmarkCount: faceResult.faceLandmarks[0].length
     }));
 
     // ステート型: 笑顔検出
-    const isSmiling = detectSmile(result.faceBlendshapes);
-    setStates(prev => ({ ...prev, isSmiling }));
+    const isSmiling = detectSmile(faceResult.faceBlendshapes);
+    const isSurprised = detectSurprise(faceResult.faceBlendshapes);
+
+    // ステート型: 手が上がっている検出（Poseが必要）
+    let isHandUp = false;
+    if (result.pose && result.pose.landmarks && result.pose.landmarks.length > 0) {
+      isHandUp = detectHandUp(result.pose.landmarks);
+    }
+
+    setStates(prev => ({ ...prev, isSmiling, isSurprised, isHandUp }));
 
     // イベント型: 頷き検出
-    detectNod(result.faceLandmarks);
+    detectNod(faceResult.faceLandmarks);
+
+    // イベント型: 縦揺れ検出（Poseが必要）
+    if (result.pose && result.pose.landmarks && result.pose.landmarks.length > 0) {
+      detectSwayVertical(result.pose.landmarks);
+    }
 
   }, []);
 

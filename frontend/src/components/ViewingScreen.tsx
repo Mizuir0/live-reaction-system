@@ -43,7 +43,7 @@ const ViewingScreen: React.FC<ViewingScreenProps> = ({ videoId, userId }) => {
 
   // カスタムフック
   const { videoRef, isReady: cameraReady, error: cameraError, requestCamera } = useCamera();
-  const { isReady: mediaPipeReady, detectFace, lastResult } = useMediaPipe();
+  const { isReady: mediaPipeReady, detectAll, lastResult } = useMediaPipe();
   const { states, events, debugInfo, updateReactions, resetEvents } = useReactionDetection();
   const { isConnected: wsConnected, error: wsError, sendReactionData, currentEffect } = useWebSocket(userId);
 
@@ -76,7 +76,7 @@ const ViewingScreen: React.FC<ViewingScreenProps> = ({ videoId, userId }) => {
 
     const detectInterval = window.setInterval(() => {
       if (videoRef.current && videoRef.current.readyState >= 2) {
-        const result = detectFace(videoRef.current);
+        const result = detectAll(videoRef.current);
         updateReactions(result);
       }
     }, 100); // 0.1秒 = 10fps
@@ -232,6 +232,7 @@ const ViewingScreen: React.FC<ViewingScreenProps> = ({ videoId, userId }) => {
             events={events}
             debugInfo={debugInfo}
             showLandmarks={showLandmarks}
+            currentEffect={currentEffect}
           />
         )}
       </div>
@@ -328,14 +329,14 @@ const ViewingScreen: React.FC<ViewingScreenProps> = ({ videoId, userId }) => {
       {/* デバッグ情報（開発用） */}
       <div style={styles.debugInfo}>
         <p style={styles.debugText}>
-          <strong>Step 5 完了:</strong> エフェクト描画機能実装 ✨
+          <strong>Step 6 完了:</strong> リアクション・エフェクト拡張 🎉
         </p>
         <p style={styles.debugText}>
           <strong>接続状態:</strong> {wsConnected ? '✅ 接続中' : '❌ 未接続'}
           {currentEffect && ` | 🎨 エフェクト: ${currentEffect.effectType} (intensity: ${currentEffect.intensity.toFixed(2)})`}
         </p>
         <p style={styles.debugText}>
-          <strong>実装済み:</strong> sparkle（笑顔）、wave（縦揺れ）エフェクト
+          <strong>実装済み:</strong> 笑顔→sparkle、驚き→excitement、頷き→wave、縦揺れ→bounce
         </p>
       </div>
     </div>

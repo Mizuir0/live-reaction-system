@@ -1,14 +1,15 @@
 import React, { useEffect, useRef } from 'react';
-import type { FaceLandmarkerResult } from '@mediapipe/tasks-vision';
-import type { ReactionStates, ReactionEvents, DetectionDebugInfo } from '../types/reactions';
+import type { MediaPipeResult } from '../hooks/useMediaPipe';
+import type { ReactionStates, ReactionEvents, DetectionDebugInfo, EffectInstruction } from '../types/reactions';
 
 interface DebugOverlayProps {
   videoRef: React.RefObject<HTMLVideoElement>;
-  detectionResult: FaceLandmarkerResult | null;
+  detectionResult: MediaPipeResult;
   states: ReactionStates;
   events: ReactionEvents;
   debugInfo: DetectionDebugInfo;
   showLandmarks?: boolean; // ランドマーク表示のオン/オフ
+  currentEffect?: EffectInstruction | null; // 現在のエフェクト
 }
 
 /**
@@ -21,7 +22,8 @@ const DebugOverlay: React.FC<DebugOverlayProps> = ({
   states,
   events,
   debugInfo,
-  showLandmarks = false // デフォルトは非表示
+  showLandmarks = false, // デフォルトは非表示
+  currentEffect = null
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -48,8 +50,8 @@ const DebugOverlay: React.FC<DebugOverlayProps> = ({
     if (!showLandmarks) return;
 
     // ランドマークの描画
-    if (detectionResult && detectionResult.faceLandmarks && detectionResult.faceLandmarks.length > 0) {
-      const landmarks = detectionResult.faceLandmarks[0];
+    if (detectionResult && detectionResult.face && detectionResult.face.faceLandmarks && detectionResult.face.faceLandmarks.length > 0) {
+      const landmarks = detectionResult.face.faceLandmarks[0];
 
       // ランドマークを点で描画
       ctx.fillStyle = '#00ff00';
@@ -118,22 +120,55 @@ const DebugOverlay: React.FC<DebugOverlayProps> = ({
           </div>
         </div>
 
+        {/* 現在のエフェクト */}
+        {currentEffect && (
+          <div style={{...styles.section, backgroundColor: 'rgba(76, 175, 80, 0.2)', padding: '10px', borderRadius: '5px'}}>
+            <h4 style={styles.sectionTitle}>🎨 現在のエフェクト</h4>
+            <div style={styles.infoRow}>
+              <span style={styles.label}>エフェクト:</span>
+              <span style={{...styles.value, color: '#4caf50', fontWeight: 'bold'}}>
+                {currentEffect.effectType}
+              </span>
+            </div>
+            <div style={styles.infoRow}>
+              <span style={styles.label}>強度:</span>
+              <span style={styles.value}>{(currentEffect.intensity * 100).toFixed(0)}%</span>
+            </div>
+          </div>
+        )}
+
         {/* ステート型リアクション */}
         <div style={styles.section}>
           <h4 style={styles.sectionTitle}>ステート型</h4>
           <div style={styles.infoRow}>
-            <span style={styles.label}>isSmiling:</span>
+            <span style={styles.label}>😊 笑顔:</span>
             <span style={{
               ...styles.value,
               color: states.isSmiling ? '#4caf50' : '#999',
               fontWeight: states.isSmiling ? 'bold' : 'normal'
             }}>
-              {states.isSmiling ? '😊 TRUE' : 'false'}
+              {states.isSmiling ? 'TRUE' : 'false'}
             </span>
           </div>
-          <div style={styles.debugValues}>
-            <span style={styles.debugLabel}>左口角: {debugInfo.smileLeftValue.toFixed(3)}</span>
-            <span style={styles.debugLabel}>右口角: {debugInfo.smileRightValue.toFixed(3)}</span>
+          <div style={styles.infoRow}>
+            <span style={styles.label}>😲 驚き:</span>
+            <span style={{
+              ...styles.value,
+              color: states.isSurprised ? '#4caf50' : '#999',
+              fontWeight: states.isSurprised ? 'bold' : 'normal'
+            }}>
+              {states.isSurprised ? 'TRUE' : 'false'}
+            </span>
+          </div>
+          <div style={styles.infoRow}>
+            <span style={styles.label}>🙌 手を上げる:</span>
+            <span style={{
+              ...styles.value,
+              color: states.isHandUp ? '#4caf50' : '#999',
+              fontWeight: states.isHandUp ? 'bold' : 'normal'
+            }}>
+              {states.isHandUp ? 'TRUE' : 'false'}
+            </span>
           </div>
         </div>
 
@@ -141,19 +176,24 @@ const DebugOverlay: React.FC<DebugOverlayProps> = ({
         <div style={styles.section}>
           <h4 style={styles.sectionTitle}>イベント型（1秒間）</h4>
           <div style={styles.infoRow}>
-            <span style={styles.label}>nod（頷き）:</span>
+            <span style={styles.label}>👍 頷き:</span>
             <span style={{
               ...styles.value,
               color: events.nod > 0 ? '#4caf50' : '#999',
-              fontWeight: events.nod > 0 ? 'bold' : 'normal',
-              fontSize: events.nod > 0 ? '18px' : '14px'
+              fontWeight: events.nod > 0 ? 'bold' : 'normal'
             }}>
-              {events.nod > 0 ? `✅ ${events.nod}回` : '0回'}
+              {events.nod > 0 ? `${events.nod}回` : '0回'}
             </span>
           </div>
-          <div style={styles.debugValues}>
-            <span style={styles.debugLabel}>頭Y座標: {debugInfo.headY.toFixed(3)}</span>
-            <span style={styles.debugLabel}>閾値: {debugInfo.headYThreshold.toFixed(3)}</span>
+          <div style={styles.infoRow}>
+            <span style={styles.label}>🎵 縦揺れ:</span>
+            <span style={{
+              ...styles.value,
+              color: events.swayVertical > 0 ? '#4caf50' : '#999',
+              fontWeight: events.swayVertical > 0 ? 'bold' : 'normal'
+            }}>
+              {events.swayVertical > 0 ? `${events.swayVertical}回` : '0回'}
+            </span>
           </div>
         </div>
       </div>

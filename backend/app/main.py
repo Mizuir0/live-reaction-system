@@ -7,7 +7,7 @@ import asyncio
 from datetime import datetime, timedelta
 import time
 
-app = FastAPI(title="Live Reaction System API - Step 4")
+app = FastAPI(title="Live Reaction System API - Step 6")
 
 # CORS設定
 app.add_middleware(
@@ -123,16 +123,34 @@ class AggregationEngine:
         # ========================
         effect_type = None
         intensity = 0.0
-        
-        # 優先順位: wave > sparkle
-        
-        # 1. wave（縦揺れ）判定
-        if density_event.get('swayVertical', 0) >= 0.25:
-            effect_type = 'wave'
+
+        # 優先順位: cheer > excitement > bounce > wave > sparkle
+
+        # 1. cheer（手を上げている）判定
+        if ratio_state.get('isHandUp', 0) >= 0.3:
+            effect_type = 'cheer'
+            intensity = min(ratio_state['isHandUp'], 1.0)
+            print(f"  ✨ Cheer効果発動! (intensity: {intensity:.2f})")
+
+        # 2. excitement（驚き）判定
+        elif ratio_state.get('isSurprised', 0) >= 0.3:
+            effect_type = 'excitement'
+            intensity = min(ratio_state['isSurprised'], 1.0)
+            print(f"  ✨ Excitement効果発動! (intensity: {intensity:.2f})")
+
+        # 3. bounce（縦揺れ）判定
+        elif density_event.get('swayVertical', 0) >= 0.2:
+            effect_type = 'bounce'
             intensity = min(density_event['swayVertical'], 1.0)
+            print(f"  ✨ Bounce効果発動! (intensity: {intensity:.2f})")
+
+        # 4. wave（頷き）判定
+        elif density_event.get('nod', 0) >= 0.3:
+            effect_type = 'wave'
+            intensity = min(density_event['nod'] / 0.5, 1.0)
             print(f"  ✨ Wave効果発動! (intensity: {intensity:.2f})")
-            
-        # 2. sparkle（笑顔）判定
+
+        # 5. sparkle（笑顔）判定
         elif ratio_state.get('isSmiling', 0) >= 0.35:
             effect_type = 'sparkle'
             intensity = min(ratio_state['isSmiling'], 1.0)
@@ -350,17 +368,16 @@ async def get_aggregation_debug():
 if __name__ == "__main__":
     import uvicorn
     print("=" * 60)
-    print("🚀 Live Reaction System - Backend Server (Step 4)")
+    print("🚀 Live Reaction System - Backend Server (Step 6)")
     print("=" * 60)
     print("📍 Server: http://localhost:8000")
     print("🔌 WebSocket: ws://localhost:8000/ws")
     print("📊 Status: http://localhost:8000/status")
     print("🐛 Debug: http://localhost:8000/debug/aggregation")
     print("=" * 60)
-    print("✨ Step 4機能:")
-    print("  - 3秒スライディングウィンドウでデータ保持")
-    print("  - 1秒ごとの自動集約処理")
-    print("  - ratio_state/density_event計算")
-    print("  - 閾値判定によるエフェクト発動")
+    print("✨ Step 6機能:")
+    print("  - リアクション拡張: 笑顔、驚き、頷き、縦揺れ")
+    print("  - エフェクト拡張: sparkle, excitement, wave, bounce")
+    print("  - 優先順位付きエフェクト判定")
     print("=" * 60)
     uvicorn.run(app, host="0.0.0.0", port=8001, log_level="info")

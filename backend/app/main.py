@@ -208,7 +208,7 @@ class AggregationEngine:
         effect_type = None
         intensity = 0.0
 
-        # 優先順位: cheer > excitement > bounce > wave > sparkle
+        # 優先順位: cheer > excitement > bounce > shimmer > wave > sparkle > focus
 
         # 1. cheer（手を上げている）判定
         if ratio_state.get('isHandUp', 0) >= 0.3:
@@ -228,17 +228,29 @@ class AggregationEngine:
             intensity = min(density_event['swayVertical'], 1.0)
             print(f"  ✨ Bounce効果発動! (intensity: {intensity:.2f})")
 
-        # 4. wave（頷き）判定
+        # 4. shimmer（首を横に振る）判定
+        elif density_event.get('shakeHead', 0) >= 0.2:
+            effect_type = 'shimmer'
+            intensity = min(density_event['shakeHead'], 1.0)
+            print(f"  ✨ Shimmer効果発動! (intensity: {intensity:.2f})")
+
+        # 5. wave（頷き）判定
         elif density_event.get('nod', 0) >= 0.3:
             effect_type = 'wave'
             intensity = min(density_event['nod'] / 0.5, 1.0)
             print(f"  ✨ Wave効果発動! (intensity: {intensity:.2f})")
 
-        # 5. sparkle（笑顔）判定
+        # 6. sparkle（笑顔）判定
         elif ratio_state.get('isSmiling', 0) >= 0.35:
             effect_type = 'sparkle'
             intensity = min(ratio_state['isSmiling'], 1.0)
             print(f"  ✨ Sparkle効果発動! (intensity: {intensity:.2f})")
+
+        # 7. focus（集中）判定
+        elif ratio_state.get('isConcentrating', 0) >= 0.4:
+            effect_type = 'focus'
+            intensity = min(ratio_state['isConcentrating'], 1.0)
+            print(f"  ✨ Focus効果発動! (intensity: {intensity:.2f})")
         
         if effect_type:
             return {

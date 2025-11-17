@@ -161,6 +161,16 @@ const DebugOverlay: React.FC<DebugOverlayProps> = ({
             </span>
           </div>
           <div style={styles.infoRow}>
+            <span style={styles.label}>🧐 集中:</span>
+            <span style={{
+              ...styles.value,
+              color: states.isConcentrating ? '#4caf50' : '#999',
+              fontWeight: states.isConcentrating ? 'bold' : 'normal'
+            }}>
+              {states.isConcentrating ? 'TRUE' : 'false'}
+            </span>
+          </div>
+          <div style={styles.infoRow}>
             <span style={styles.label}>🙌 手を上げる:</span>
             <span style={{
               ...styles.value,
@@ -183,6 +193,16 @@ const DebugOverlay: React.FC<DebugOverlayProps> = ({
               fontWeight: events.nod > 0 ? 'bold' : 'normal'
             }}>
               {events.nod > 0 ? `${events.nod}回` : '0回'}
+            </span>
+          </div>
+          <div style={styles.infoRow}>
+            <span style={styles.label}>↔️ 首を横に振る:</span>
+            <span style={{
+              ...styles.value,
+              color: events.shakeHead > 0 ? '#4caf50' : '#999',
+              fontWeight: events.shakeHead > 0 ? 'bold' : 'normal'
+            }}>
+              {events.shakeHead > 0 ? `${events.shakeHead}回` : '0回'}
             </span>
           </div>
           <div style={styles.infoRow}>

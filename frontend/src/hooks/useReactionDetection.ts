@@ -49,6 +49,13 @@ export const useReactionDetection = (): UseReactionDetectionReturn => {
   const downStateStartTime = useRef<number>(0); // down状態開始時刻
   const nodState = useRef<'neutral' | 'down'>('neutral');
 
+  // 首を横に振る検出用の状態管理
+  const headXHistory = useRef<number[]>([]);
+  const prevHeadX = useRef<number>(0); // 前フレームのX座標
+  const lastShakeTime = useRef<number>(0);
+  const shakeLeftStartTime = useRef<number>(0); // left状態開始時刻
+  const shakeState = useRef<'neutral' | 'left' | 'right'>('neutral');
+
   // 縦揺れ検出用の状態管理
   const swayYHistory = useRef<number[]>([]);
   const prevSwayY = useRef<number>(0);
@@ -98,6 +105,42 @@ export const useReactionDetection = (): UseReactionDetectionReturn => {
 
     return (eyeWideLeft > EYE_WIDE_THRESHOLD && eyeWideRight > EYE_WIDE_THRESHOLD) &&
            jawOpen > JAW_OPEN_THRESHOLD;
+  };
+
+  /**
+   * 集中検出（ステート型）
+   */
+  const detectConcentrating = (blendshapes: any): boolean => {
+    if (!blendshapes || blendshapes.length === 0) return false;
+
+    const categories = blendshapes[0].categories;
+
+    // 眉を寄せている（集中時の表情）
+    const browDownLeft = categories.find((c: any) => c.categoryName === 'browDownLeft')?.score || 0;
+    const browDownRight = categories.find((c: any) => c.categoryName === 'browDownRight')?.score || 0;
+
+    // 両方の眉が下がっているかチェック
+    const BROW_DOWN_THRESHOLD = 0.5;
+    const browsDown = browDownLeft > BROW_DOWN_THRESHOLD && browDownRight > BROW_DOWN_THRESHOLD;
+
+    // 頭部の動きが小さいかチェック（直近1秒 = 約10フレーム）
+    if (headYHistory.current.length < 10) {
+      // 履歴が不足している場合は眉の状態のみで判定
+      return browsDown;
+    }
+
+    // 直近10フレームの頭部Y座標の標準偏差を計算
+    const recentY = headYHistory.current.slice(-10);
+    const avgY = recentY.reduce((a, b) => a + b, 0) / recentY.length;
+    const variance = recentY.reduce((sum, y) => sum + Math.pow(y - avgY, 2), 0) / recentY.length;
+    const stdDev = Math.sqrt(variance);
+
+    // 標準偏差が小さい = 頭部の動きが小さい
+    const HEAD_MOVEMENT_THRESHOLD = 0.005; // 小さい動きの閾値
+    const isStill = stdDev < HEAD_MOVEMENT_THRESHOLD;
+
+    // 眉が下がっている かつ 頭部の動きが小さい
+    return browsDown && isStill;
   };
 
   /**
@@ -173,6 +216,83 @@ export const useReactionDetection = (): UseReactionDetectionReturn => {
       const downDuration = currentTime - downStateStartTime.current;
       console.log('状態: DOWN → NEUTRAL (上向き移動:', deltaFromPrev.toFixed(4), ', down時間:', (downDuration/1000).toFixed(2), '秒)');
       nodState.current = 'neutral';
+    }
+  };
+
+  /**
+   * 首を横に振る検出（イベント型）- 顔のX座標の変化を追跡
+   */
+  const detectShakeHead = (landmarks: any): void => {
+    if (!landmarks || landmarks.length === 0) return;
+
+    // 顔の中心（鼻の先端）のX座標を取得
+    const noseTip = landmarks[0][1]; // landmark index 1 = 鼻の先端
+    const currentX = noseTip.x;
+
+    // X座標の履歴を保持（最新8フレーム）
+    headXHistory.current.push(currentX);
+    if (headXHistory.current.length > 8) {
+      headXHistory.current.shift();
+    }
+
+    // 履歴が十分に溜まっていない場合は終了
+    if (headXHistory.current.length < 5) {
+      // 初期化
+      prevHeadX.current = currentX;
+      return;
+    }
+
+    // 移動平均を計算してノイズを除去
+    const avgX = headXHistory.current.reduce((a, b) => a + b, 0) / headXHistory.current.length;
+
+    // 前フレームとの差分（横方向の動きを検出）
+    const deltaFromPrev = avgX - prevHeadX.current;
+    prevHeadX.current = avgX;
+
+    // 閾値設定
+    const HORIZONTAL_MOVEMENT_THRESHOLD = 0.008;  // 横方向の動き検出閾値
+    const TIMEOUT_MS = 1500;                       // 1.5秒でタイムアウト
+
+    const currentTime = performance.now();
+
+    // タイムアウトチェック: 状態が1.5秒以上続いたら自動的にneutral復帰
+    if (shakeState.current !== 'neutral') {
+      const stateDuration = currentTime - shakeLeftStartTime.current;
+      if (stateDuration > TIMEOUT_MS) {
+        console.log('⏱️ タイムアウト: NEUTRAL復帰 (shake状態', (stateDuration/1000).toFixed(1), '秒)');
+        shakeState.current = 'neutral';
+        return;
+      }
+    }
+
+    // 状態遷移の検出（左右の動き）
+    if (shakeState.current === 'neutral' && Math.abs(deltaFromPrev) > HORIZONTAL_MOVEMENT_THRESHOLD) {
+      // 横方向の動き検出
+      const timeSinceLastShake = currentTime - lastShakeTime.current;
+
+      // 0.3秒以上経過していればカウント（連続カウント防止）
+      if (timeSinceLastShake > 300) {
+        setEvents(prev => ({ ...prev, shakeHead: prev.shakeHead + 1 }));
+        console.log('✅ 首横振り検出！- 横移動:', deltaFromPrev.toFixed(4));
+        lastShakeTime.current = currentTime;
+      }
+
+      // 左右どちらに動いたかで状態を設定
+      shakeState.current = deltaFromPrev > 0 ? 'right' : 'left';
+      shakeLeftStartTime.current = currentTime;
+      console.log('状態: NEUTRAL →', shakeState.current.toUpperCase());
+
+    } else if (shakeState.current === 'left' && deltaFromPrev > HORIZONTAL_MOVEMENT_THRESHOLD) {
+      // 左から右への動き → neutral に復帰
+      const stateDuration = currentTime - shakeLeftStartTime.current;
+      console.log('状態: LEFT → NEUTRAL (右移動:', deltaFromPrev.toFixed(4), ', 状態時間:', (stateDuration/1000).toFixed(2), '秒)');
+      shakeState.current = 'neutral';
+
+    } else if (shakeState.current === 'right' && deltaFromPrev < -HORIZONTAL_MOVEMENT_THRESHOLD) {
+      // 右から左への動き → neutral に復帰
+      const stateDuration = currentTime - shakeLeftStartTime.current;
+      console.log('状態: RIGHT → NEUTRAL (左移動:', deltaFromPrev.toFixed(4), ', 状態時間:', (stateDuration/1000).toFixed(2), '秒)');
+      shakeState.current = 'neutral';
     }
   };
 
@@ -297,6 +417,7 @@ export const useReactionDetection = (): UseReactionDetectionReturn => {
     // ステート型: 笑顔検出
     const isSmiling = detectSmile(faceResult.faceBlendshapes);
     const isSurprised = detectSurprise(faceResult.faceBlendshapes);
+    const isConcentrating = detectConcentrating(faceResult.faceBlendshapes);
 
     // ステート型: 手が上がっている検出（Poseが必要）
     let isHandUp = false;
@@ -304,10 +425,13 @@ export const useReactionDetection = (): UseReactionDetectionReturn => {
       isHandUp = detectHandUp(result.pose.landmarks);
     }
 
-    setStates(prev => ({ ...prev, isSmiling, isSurprised, isHandUp }));
+    setStates(prev => ({ ...prev, isSmiling, isSurprised, isConcentrating, isHandUp }));
 
     // イベント型: 頷き検出
     detectNod(faceResult.faceLandmarks);
+
+    // イベント型: 首を横に振る検出
+    detectShakeHead(faceResult.faceLandmarks);
 
     // イベント型: 縦揺れ検出（Poseが必要）
     if (result.pose && result.pose.landmarks && result.pose.landmarks.length > 0) {

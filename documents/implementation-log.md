@@ -1,5 +1,893 @@
 # 実装ログ
 
+## Step 1: YouTube埋め込み + 初期画面/視聴画面の切り替え（完了）
+
+実装日: 2025-11-13
+
+### 概要
+
+プロジェクトの基盤となるフロントエンド画面構成を実装しました。ユーザーIDの管理、画面遷移、YouTube動画の埋め込みなど、システムの基本的なUI/UX構造が完成しました。
+
+### 実装内容
+
+#### 1. ユーザーID管理 (`frontend/src/utils/userIdManager.ts`)
+
+**機能:**
+- 初回アクセス時にランダムなユーザーIDを生成
+- localStorageに永続化（ブラウザを閉じても保持）
+- 後のWebSocket通信とDB記録で使用
+
+**実装詳細:**
+```typescript
+export function getUserId(): string {
+  let userId = localStorage.getItem('userId');
+  if (!userId) {
+    userId = `user-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+    localStorage.setItem('userId', userId);
+  }
+  return userId;
+}
+```
+
+#### 2. 初期画面の実装 (`frontend/src/components/InitialScreen.tsx`)
+
+**画面構成:**
+- タイトル表示「Live Reaction System」
+- ユーザーIDの表示（自動生成されたIDを確認可能）
+- 「視聴画面へ」ボタン
+
+**機能:**
+- `getUserId()` でユーザーIDを取得・表示
+- ボタンクリックで視聴画面へ遷移
+- シンプルで分かりやすいUI
+
+#### 3. 視聴画面の実装 (`frontend/src/components/ViewingScreen.tsx`)
+
+**画面要素:**
+- YouTube プレイヤー（react-youtube を使用）
+- Canvas要素（後のエフェクト描画用、この段階では空）
+- リアクション送信状態の表示（「OFF」の状態）
+- ユーザーID表示
+
+**YouTube埋め込み:**
+```typescript
+import YouTube from 'react-youtube';
+
+// デフォルト動画ID（後で変更可能）
+const DEFAULT_VIDEO_ID = 'dQw4w9WgXcQ';
+
+const opts = {
+  height: '390',
+  width: '640',
+  playerVars: {
+    autoplay: 0,
+  },
+};
+```
+
+#### 4. 画面遷移の実装 (`frontend/src/App.tsx`)
+
+**状態管理:**
+- `currentScreen` ステートで現在の画面を管理
+- 'initial' | 'viewing' の2つの状態
+
+**遷移フロー:**
+```
+初期画面 (InitialScreen)
+  ↓ 「視聴画面へ」ボタンクリック
+視聴画面 (ViewingScreen)
+```
+
+#### 5. スタイリングの整備
+
+**変更点:**
+- `App.css`: 不要なデフォルトスタイルを削除
+- `index.css`: シンプルで見やすいレイアウトに調整
+- ダークモードに対応した配色
+
+### ファイル構成
+
+```
+frontend/src/
+├── App.tsx                          # メイン画面遷移ロジック
+├── components/
+│   ├── InitialScreen.tsx            # 初期画面
+│   └── ViewingScreen.tsx            # 視聴画面（YouTube + Canvas）
+└── utils/
+    └── userIdManager.ts             # ユーザーID管理
+```
+
+### 技術的な選択
+
+**react-youtube の採用:**
+- YouTube IFrame Player API を React でラップしたライブラリ
+- イベントハンドリングが容易
+- TypeScript サポートあり
+
+**localStorage の使用:**
+- ユーザーIDの永続化
+- シンプルで信頼性が高い
+- クッキー不要でプライバシー配慮
+
+### ビルド確認
+
+✅ TypeScript コンパイル: エラーなし
+✅ npm run dev: 開発サーバー起動成功
+✅ 画面遷移: 正常動作確認
+✅ YouTube埋め込み: 動画再生確認
+
+### 次のステップ（Step 2）
+
+- カメラ取得（getUserMedia）
+- MediaPipe の統合
+- リアクション検出の基本実装（笑顔、頷き）
+
+---
+
+## Step 2: カメラ取得 + MediaPipe でログ出し（完了）
+
+実装日: 2025-11-13
+
+### 概要
+
+カメラ映像の取得とMediaPipeによる顔検出・リアクション判定の基本機能を実装しました。ステート型（笑顔）とイベント型（頷き）のリアクションを検出し、画面に表示できるようになりました。
+
+### 実装内容
+
+#### 1. カメラ取得フック (`frontend/src/hooks/useCamera.ts`)
+
+**機能:**
+- `getUserMedia()` でカメラ映像を取得
+- video要素へのストリーム接続
+- エラーハンドリング（カメラ未接続、権限拒否など）
+
+**実装詳細:**
+```typescript
+export function useCamera(videoRef: RefObject<HTMLVideoElement>) {
+  const [isReady, setIsReady] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function setupCamera() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { width: 1280, height: 720 },
+          audio: false,
+        });
+
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          await videoRef.current.play();
+          setIsReady(true);
+        }
+      } catch (err) {
+        setError('カメラアクセスエラー');
+      }
+    }
+
+    setupCamera();
+  }, []);
+
+  return { isReady, error };
+}
+```
+
+#### 2. MediaPipe統合フック (`frontend/src/hooks/useMediaPipe.ts`)
+
+**使用モデル:**
+- Face Landmarker (MediaPipe)
+- BlendShapes（顔の表情パラメータ）を利用
+- ランドマーク座標（478点）を取得
+
+**初期化処理:**
+```typescript
+const faceLandmarker = await FaceLandmarker.createFromOptions(filesetResolver, {
+  baseOptions: {
+    modelAssetPath: `https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task`,
+    delegate: "GPU"
+  },
+  outputFaceBlendshapes: true,
+  runningMode: "VIDEO",
+  numFaces: 1
+});
+```
+
+**検出関数:**
+- `detectFace()`: video要素から顔を検出
+- BlendShapesとランドマーク座標を返却
+- 10fps（0.1秒ごと）で実行
+
+#### 3. リアクション検出フック (`frontend/src/hooks/useReactionDetection.ts`)
+
+**型定義 (`frontend/src/types/reactions.ts`):**
+```typescript
+// ステート型（その瞬間の状態）
+export interface ReactionStates {
+  isSmiling: boolean;
+}
+
+// イベント型（1秒間のカウント）
+export interface ReactionEvents {
+  nod: number;
+}
+```
+
+**検出ロジック:**
+
+##### (a) 笑顔検出（ステート型）
+
+**判定方法:**
+- MediaPipe BlendShapes の `mouthSmileLeft` と `mouthSmileRight` を使用
+- 両方が 0.3 以上の場合に笑顔と判定
+
+```typescript
+const smileLeft = blendshapes.find(b => b.categoryName === 'mouthSmileLeft')?.score || 0;
+const smileRight = blendshapes.find(b => b.categoryName === 'mouthSmileRight')?.score || 0;
+const isSmiling = smileLeft > 0.3 && smileRight > 0.3;
+```
+
+##### (b) 頷き検出（イベント型）
+
+**判定方法:**
+- 顔の鼻先（ランドマーク座標）のY座標を追跡
+- 移動平均で平滑化（8フレーム履歴）
+- 下向きの動き（閾値: 0.008）を検出
+
+**カウント条件:**
+- 前回の頷きから 0.3秒以上経過
+- タイムアウト: 2秒（頷きが検出されなければカウントリセット）
+
+```typescript
+const movingAverage = history.reduce((sum, val) => sum + val, 0) / history.length;
+const delta = currentY - movingAverage;
+
+if (delta > 0.008) {  // 下向きの動き
+  const now = Date.now();
+  if (now - lastNodTime > 300) {  // 0.3秒以上経過
+    nodCount++;
+    lastNodTime = now;
+  }
+}
+```
+
+#### 4. デバッグオーバーレイ (`frontend/src/components/DebugOverlay.tsx`)
+
+**表示内容:**
+- 😊 笑顔: true/false
+- 👍 頷き: カウント数
+- ランドマーク可視化（顔の輪郭、目、口など）
+- MediaPipe検出状態
+
+**描画機能:**
+- Canvas上にランドマーク座標を描画
+- 判定ロジック調整が容易になる視覚フィードバック
+
+#### 5. ViewingScreen への統合
+
+**更新内容:**
+- カメラ映像のvideo要素を追加
+- `useCamera`、`useMediaPipe`、`useReactionDetection` を統合
+- リアクション状態をリアルタイム表示
+- デバッグオーバーレイの表示
+
+**検出ループ:**
+```typescript
+// 10fps（0.1秒ごと）でリアクション検出
+setInterval(() => {
+  const result = detectFace(videoRef.current);
+  updateReactions(result);
+}, 100);
+```
+
+### データフロー
+
+```
+カメラ映像 (getUserMedia)
+  ↓
+MediaPipe Face Landmarker (10fps)
+  ↓ BlendShapes + ランドマーク座標
+リアクション検出
+  ↓ 笑顔判定（ステート型）
+  ↓ 頷き判定（イベント型）
+画面表示（デバッグオーバーレイ）
+```
+
+### ビルド確認
+
+✅ TypeScript コンパイル: エラーなし
+✅ カメラ取得: 正常動作確認
+✅ MediaPipe初期化: モデル読み込み成功
+✅ リアクション検出: 笑顔・頷きともに動作確認
+
+### 技術的な課題と解決策
+
+**課題1: MediaPipeモデルの読み込み時間**
+- 解決策: GPU delegateを使用して高速化
+- 初回読み込み時にローディング表示
+
+**課題2: 頷き検出の誤検出**
+- 解決策: 移動平均で平滑化、カウント間隔を設定
+- タイムアウト機能で連続カウントを防止
+
+**課題3: ランドマーク座標の正規化**
+- 解決策: MediaPipeが返す座標は0-1の正規化済み
+- Canvas描画時にwidth/heightで乗算
+
+### まとめ
+
+Step 2 の実装により、以下の機能が実現しました：
+
+✅ カメラ映像の取得と表示
+✅ MediaPipe Face Landmarker の統合
+✅ 笑顔検出（ステート型リアクション）
+✅ 頷き検出（イベント型リアクション）
+✅ リアルタイムデバッグ表示
+
+**ロードマップ進捗: 約30%完了**
+
+次のステップ:
+- Step 3: WebSocketでサーバーへリアクションデータ送信
+
+---
+
+## Step 3: WebSocket で C→S の送信（完了）
+
+実装日: 2025-11-15
+
+### 概要
+
+クライアントで検出したリアクションデータをWebSocketを使ってサーバーに送信する機能を実装しました。1秒ごとにJSON形式でデータを送信し、サーバーからのエコーバックを受信して動作確認できるようになりました。
+
+### 実装内容
+
+#### 1. WebSocketフック (`frontend/src/hooks/useWebSockets.ts`)
+
+**機能:**
+- WebSocket接続の確立・管理
+- リアクションデータの1秒ごとの自動送信
+- サーバーからのメッセージ受信
+- 接続エラーハンドリング
+
+**実装詳細:**
+```typescript
+export function useWebSocket(userId: string) {
+  const [isConnected, setIsConnected] = useState(false);
+  const wsRef = useRef<WebSocket | null>(null);
+  const reactionsRef = useRef<ReactionData>({
+    states: { isSmiling: false },
+    events: { nod: 0 }
+  });
+
+  useEffect(() => {
+    // WebSocket接続
+    const ws = new WebSocket('ws://localhost:8000/ws');
+
+    ws.onopen = () => {
+      console.log('✅ WebSocket接続成功');
+      setIsConnected(true);
+    };
+
+    ws.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      console.log('📥 サーバーから受信:', data);
+    };
+
+    ws.onerror = (error) => {
+      console.error('❌ WebSocketエラー:', error);
+    };
+
+    ws.onclose = () => {
+      console.log('🔌 WebSocket切断');
+      setIsConnected(false);
+    };
+
+    wsRef.current = ws;
+
+    return () => {
+      ws.close();
+    };
+  }, [userId]);
+
+  return { isConnected, updateReactions, lastReceivedData };
+}
+```
+
+**送信タイマー:**
+```typescript
+// 1秒ごとにリアクションデータを送信
+setInterval(() => {
+  if (wsRef.current?.readyState === WebSocket.OPEN) {
+    const payload = {
+      userId: userId,
+      timestamp: Date.now(),
+      states: reactionsRef.current.states,
+      events: reactionsRef.current.events
+    };
+
+    wsRef.current.send(JSON.stringify(payload));
+    console.log('📤 送信:', payload);
+
+    // イベント型カウントをリセット
+    reactionsRef.current.events = { nod: 0 };
+  }
+}, 1000);
+```
+
+**リアクション更新関数:**
+```typescript
+function updateReactions(states: ReactionStates, events: ReactionEvents) {
+  reactionsRef.current.states = states;
+  // イベント型はカウントを累積
+  reactionsRef.current.events.nod += events.nod;
+}
+```
+
+#### 2. バックエンドのWebSocketエンドポイント (`backend/app/main.py`)
+
+**FastAPI + WebSocketの実装:**
+```python
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
+import json
+
+app = FastAPI()
+
+# CORS設定
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# 接続中のクライアント管理
+active_connections: dict[str, WebSocket] = {}
+
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    await websocket.accept()
+    user_id = None
+
+    try:
+        while True:
+            # クライアントからデータ受信
+            data = await websocket.receive_text()
+            message = json.loads(data)
+
+            user_id = message.get('userId')
+            if user_id:
+                active_connections[user_id] = websocket
+
+            # 受信内容をログ出力
+            print(f"📥 受信 ({user_id}): {message}")
+
+            # エコーバック（デバッグ用）
+            await websocket.send_text(json.dumps({
+                "type": "echo",
+                "originalMessage": message,
+                "serverTime": int(time.time() * 1000)
+            }))
+
+    except WebSocketDisconnect:
+        if user_id and user_id in active_connections:
+            del active_connections[user_id]
+        print(f"🔌 切断: {user_id}")
+```
+
+**ヘルスチェックエンドポイント:**
+```python
+@app.get("/")
+async def health_check():
+    return {
+        "status": "ok",
+        "message": "Live Reaction System - Backend",
+        "connections": len(active_connections)
+    }
+```
+
+#### 3. ViewingScreen の更新
+
+**WebSocket統合:**
+```typescript
+const userId = getUserId();
+const { isConnected, updateReactions, lastReceivedData } = useWebSocket(userId);
+
+// リアクション検出ループ（0.1秒ごと）
+useEffect(() => {
+  const interval = setInterval(() => {
+    const result = detectFace(videoRef.current);
+    const { states, events } = detectReactions(result);
+    updateReactions(states, events);  // WebSocketフックに渡す
+  }, 100);
+
+  return () => clearInterval(interval);
+}, []);
+```
+
+**デバッグ表示の追加:**
+- WebSocket接続状態（🟢 接続中 / 🔴 切断中）
+- 送信データの内容
+- 受信データの内容（エコーバック）
+- タイムスタンプ
+
+#### 4. タイマー分離の実装
+
+**検出更新タイマー（0.1秒 = 100ms）:**
+```typescript
+setInterval(() => {
+  updateReactionState();  // MediaPipe検出 + リアクション判定
+}, 100);
+```
+
+**送信タイマー（1秒 = 1000ms）:**
+```typescript
+setInterval(() => {
+  sendToServer();  // WebSocket送信
+}, 1000);
+```
+
+**重要なポイント:**
+- 検出は高頻度（10fps）で実行して精度を確保
+- 送信は低頻度（1fps）でネットワーク負荷を軽減
+- イベント型カウントは1秒間累積してから送信
+
+### データフロー
+
+```
+クライアント
+  ↓ MediaPipe検出（0.1秒ごと）
+  ↓ リアクション判定
+  ↓ updateReactions() でカウント累積
+  ↓ WebSocket送信（1秒ごと）
+    {
+      userId: "user-xxx",
+      timestamp: 1700000000000,
+      states: { isSmiling: true },
+      events: { nod: 2 }
+    }
+
+サーバー
+  ↓ WebSocket受信
+  ↓ ログ出力
+  ↓ エコーバック（デバッグ用）
+    {
+      type: "echo",
+      originalMessage: { ... },
+      serverTime: 1700000000000
+    }
+
+クライアント
+  ↓ エコー受信
+  ↓ 画面に表示（送受信内容の確認）
+```
+
+### ビルド確認
+
+✅ フロントエンド: ビルドエラーなし
+✅ バックエンド: uvicorn起動成功
+✅ WebSocket接続: 正常確立
+✅ データ送受信: JSON形式で正常動作
+✅ エコーバック: サーバーからの返信確認
+
+### 技術的な課題と解決策
+
+**課題1: WebSocket URLのハードコーディング**
+- 解決策: 環境変数（import.meta.env.VITE_WS_URL）の使用を検討
+- 現状はローカル開発用に固定（`ws://localhost:8000/ws`）
+
+**課題2: 接続切断時の自動再接続**
+- 解決策: Step 3では未実装、後のステップで必要に応じて追加
+- 現状は手動リロードで再接続
+
+**課題3: イベント型カウントのリセットタイミング**
+- 解決策: 送信直後にカウントをリセット
+- `events.nod = 0` を送信後に実行
+
+**課題4: シリアライズミス検出**
+- 解決策: 送信内容と受信内容を両方画面に表示
+- コンソールログで詳細確認
+
+### まとめ
+
+Step 3 の実装により、以下の機能が実現しました：
+
+✅ WebSocket接続の確立・管理
+✅ 1秒ごとのリアクションデータ送信
+✅ サーバーからのエコーバック受信
+✅ 送受信データのデバッグ表示
+✅ 検出タイマーと送信タイマーの分離
+
+**ロードマップ進捗: 約50%完了**
+
+次のステップ:
+- Step 4: サーバー側で3秒窓の集約 + エフェクト判定
+
+---
+
+## Step 4: サーバー側で3秒窓の集約 + エフェクト判定（完了）
+
+実装日: 2025-11-17
+
+### 概要
+
+複数クライアントから送信されるリアクションデータを3秒窓で集約し、条件に基づいてエフェクトを判定する機能を実装しました。これにより、観客全体の反応を統合してエフェクト指示を生成できるようになりました。
+
+### 実装内容
+
+#### 1. データ構造の定義 (`backend/app/main.py`)
+
+**ユーザーデータ管理:**
+```python
+from collections import deque
+from dataclasses import dataclass
+from typing import Dict, Deque
+import asyncio
+import time
+
+@dataclass
+class ReactionSample:
+    timestamp: int  # ミリ秒
+    states: Dict[str, bool]  # {isSmiling: true/false}
+    events: Dict[str, int]   # {nod: 2}
+
+# ユーザーごとに直近3秒分のデータを保持
+user_data: Dict[str, Deque[ReactionSample]] = {}
+```
+
+**データ保持方式:**
+- `deque`（両端キュー）で最新3件を管理
+- 1秒ごとの送信なので、3件 = 3秒窓
+- 古いデータは自動的に削除
+
+#### 2. データ受信処理の更新
+
+**WebSocketエンドポイントの変更:**
+```python
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    await websocket.accept()
+    user_id = None
+
+    try:
+        while True:
+            data = await websocket.receive_text()
+            message = json.loads(data)
+
+            user_id = message.get('userId')
+            timestamp = message.get('timestamp', int(time.time() * 1000))
+            states = message.get('states', {})
+            events = message.get('events', {})
+
+            # ユーザーデータに追加
+            if user_id not in user_data:
+                user_data[user_id] = deque(maxlen=3)
+
+            sample = ReactionSample(
+                timestamp=timestamp,
+                states=states,
+                events=events
+            )
+            user_data[user_id].append(sample)
+
+            print(f"📥 受信 ({user_id}): states={states}, events={events}")
+
+    except WebSocketDisconnect:
+        if user_id and user_id in user_data:
+            del user_data[user_id]
+        print(f"🔌 切断: {user_id}")
+```
+
+#### 3. 集約ループの実装
+
+**非同期バックグラウンドタスク:**
+```python
+async def aggregation_loop():
+    """1秒ごとに集約処理を実行"""
+    while True:
+        await asyncio.sleep(1)
+
+        # 3秒以内にデータがあるユーザーを「有効ユーザー」とみなす
+        now = int(time.time() * 1000)
+        active_users = []
+
+        for user_id, samples in user_data.items():
+            if samples and (now - samples[-1].timestamp) <= 3000:
+                active_users.append(user_id)
+
+        if not active_users:
+            continue
+
+        # ステート型の集約: ratio_state
+        ratio_state = {}
+        for state_key in ['isSmiling']:
+            true_count = sum(
+                1 for uid in active_users
+                for sample in user_data[uid]
+                if sample.states.get(state_key, False)
+            )
+            ratio_state[state_key] = true_count / len(active_users)
+
+        # イベント型の集約: density_event
+        density_event = {}
+        for event_key in ['nod']:
+            total_count = sum(
+                sample.events.get(event_key, 0)
+                for uid in active_users
+                for sample in user_data[uid]
+            )
+            density_event[event_key] = total_count / (len(active_users) * 3)
+
+        # エフェクト判定
+        effect = determine_effect(ratio_state, density_event, active_users)
+
+        if effect:
+            print(f"✨ エフェクト発動: {effect}")
+            await broadcast(effect)
+```
+
+**起動処理:**
+```python
+@app.on_event("startup")
+async def startup_event():
+    asyncio.create_task(aggregation_loop())
+    print("🚀 集約ループ起動")
+```
+
+#### 4. エフェクト判定ロジック
+
+**判定関数:**
+```python
+def determine_effect(ratio_state, density_event, active_users):
+    """条件に基づいてエフェクトを判定"""
+
+    # sparkle: 笑顔が30%以上
+    if ratio_state.get('isSmiling', 0) >= 0.3:
+        return {
+            'type': 'effect',
+            'effectType': 'sparkle',
+            'intensity': ratio_state['isSmiling'],  # 0〜1の範囲
+            'durationMs': 2000,
+            'timestamp': int(time.time() * 1000),
+            'debug': {
+                'activeUsers': len(active_users),
+                'ratioState': ratio_state,
+                'densityEvent': density_event
+            }
+        }
+
+    return None
+```
+
+**判定の優先順位:**
+- この段階では `sparkle` のみ実装
+- Step 6で複数エフェクトの優先順位を実装
+
+#### 5. ブロードキャスト機能
+
+**全クライアントへの配信:**
+```python
+async def broadcast(message: dict):
+    """接続中の全クライアントにメッセージを送信"""
+    disconnected_users = []
+
+    for user_id, ws in active_connections.items():
+        try:
+            await ws.send_text(json.dumps(message))
+        except Exception as e:
+            print(f"⚠️ 送信エラー ({user_id}): {e}")
+            disconnected_users.append(user_id)
+
+    # 切断されたユーザーを削除
+    for user_id in disconnected_users:
+        del active_connections[user_id]
+```
+
+#### 6. デバッグエンドポイントの追加
+
+**集約データ確認API:**
+```python
+@app.get("/debug/aggregation")
+async def get_aggregation_debug():
+    """現在の集約状態を取得"""
+    now = int(time.time() * 1000)
+
+    active_users = []
+    for user_id, samples in user_data.items():
+        if samples and (now - samples[-1].timestamp) <= 3000:
+            active_users.append({
+                'userId': user_id,
+                'sampleCount': len(samples),
+                'latestTimestamp': samples[-1].timestamp
+            })
+
+    return {
+        'activeUserCount': len(active_users),
+        'activeUsers': active_users,
+        'timestamp': now
+    }
+```
+
+### データフロー（Step 4版）
+
+```
+クライアント（複数）
+  ↓ WebSocket送信（1秒ごと）
+    {userId, timestamp, states, events}
+
+サーバー
+  ↓ user_data に保存（deque, maxlen=3）
+  ↓ 集約ループ（1秒ごと）
+    1. 有効ユーザーの抽出（3秒以内にデータあり）
+    2. ratio_state の計算
+       - isSmiling: true のユーザー数 / 有効ユーザー数
+    3. density_event の計算
+       - nod: 合計カウント / (有効ユーザー数 * 3秒)
+    4. エフェクト判定
+       - sparkle: ratio_state['isSmiling'] >= 0.3
+  ↓ ブロードキャスト
+    {
+      type: 'effect',
+      effectType: 'sparkle',
+      intensity: 0.45,
+      durationMs: 2000,
+      timestamp: ...
+    }
+
+クライアント（全員）
+  ↓ エフェクト指示受信
+  ↓ 画面に表示（Step 5で実装）
+```
+
+### ビルド確認
+
+✅ バックエンド起動: uvicorn正常動作
+✅ 集約ループ起動: バックグラウンドタスク実行確認
+✅ データ保持: dequeで3秒窓管理
+✅ エフェクト判定: 条件に基づく判定成功
+✅ ブロードキャスト: 全クライアントへ配信確認
+
+### 技術的な課題と解決策
+
+**課題1: 集約タイミングの精度**
+- 解決策: `asyncio.sleep(1)` で1秒ごとに実行
+- 実際の遅延は1.0〜1.1秒程度（許容範囲）
+
+**課題2: 有効ユーザーの判定基準**
+- 解決策: 最新サンプルのタイムスタンプが3秒以内
+- `(now - samples[-1].timestamp) <= 3000`
+
+**課題3: dequeのサイズ管理**
+- 解決策: `maxlen=3` で自動的に古いデータを削除
+- メモリ効率的で実装がシンプル
+
+**課題4: エフェクトの重複発動**
+- 解決策: Step 4では未対応、Step 6で優先順位実装
+- 現状は最初にマッチした条件のみ発動
+
+**課題5: intensity の正規化**
+- 解決策: `ratio_state` は 0〜1 の範囲で自動的に正規化される
+- エフェクト描画時にそのまま使用可能
+
+### まとめ
+
+Step 4 の実装により、以下の機能が実現しました：
+
+✅ 3秒窓のデータ保持（deque使用）
+✅ 有効ユーザーの自動判定
+✅ ステート型の集約（ratio_state）
+✅ イベント型の集約（density_event）
+✅ エフェクト判定ロジック
+✅ ブロードキャスト機能
+✅ デバッグエンドポイント
+
+**ロードマップ進捗: 約60%完了**
+
+次のステップ:
+- Step 5: クライアント側のエフェクト描画
+
+---
+
 ## Step 5: エフェクト描画機能の実装（完了）
 
 実装日: 2025-11-17

@@ -6,8 +6,92 @@ import json
 import asyncio
 from datetime import datetime, timedelta
 import time
+import sqlite3
+from pathlib import Path
+from contextlib import contextmanager
 
-app = FastAPI(title="Live Reaction System API - Step 6")
+app = FastAPI(title="Live Reaction System API - Step 7")
+
+# ========================
+# データベース設定
+# ========================
+
+DB_DIR = Path(__file__).parent.parent / "data"
+DB_PATH = DB_DIR / "live_reaction.db"
+
+@contextmanager
+def get_db_connection():
+    """データベース接続のコンテキストマネージャー"""
+    conn = sqlite3.connect(DB_PATH)
+    try:
+        yield conn
+    finally:
+        conn.close()
+
+def ensure_user_exists(user_id: str):
+    """ユーザーが存在しない場合はusersテーブルに追加"""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+
+        # ユーザーが存在するかチェック
+        cursor.execute("SELECT id FROM users WHERE id = ?", (user_id,))
+        if cursor.fetchone() is None:
+            # 新規ユーザーを追加（デフォルトはexperimental群）
+            created_at = int(time.time() * 1000)
+            cursor.execute(
+                "INSERT INTO users (id, experiment_group, created_at) VALUES (?, ?, ?)",
+                (user_id, 'experimental', created_at)
+            )
+            conn.commit()
+            print(f"✅ 新規ユーザーをDBに登録: {user_id}")
+
+def log_reaction(user_id: str, data: dict):
+    """リアクションデータをreactions_logに記録"""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+
+        timestamp = int(time.time() * 1000)
+        states = data.get('states', {})
+        events = data.get('events', {})
+
+        cursor.execute("""
+            INSERT INTO reactions_log (
+                user_id, timestamp,
+                is_smiling, is_surprised, is_concentrating, is_hand_up,
+                nod_count, sway_vertical_count, cheer_count, clap_count
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            user_id,
+            timestamp,
+            states.get('isSmiling', False),
+            states.get('isSurprised', False),
+            states.get('isConcentrating', False),
+            states.get('isHandUp', False),
+            events.get('nod', 0),
+            events.get('swayVertical', 0),
+            events.get('cheer', 0),
+            events.get('clap', 0)
+        ))
+        conn.commit()
+
+def log_effect(effect_data: dict):
+    """エフェクト指示をeffects_logに記録"""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+
+        timestamp = effect_data.get('timestamp', int(time.time() * 1000))
+
+        cursor.execute("""
+            INSERT INTO effects_log (
+                timestamp, effect_type, intensity, duration_ms
+            ) VALUES (?, ?, ?, ?)
+        """, (
+            timestamp,
+            effect_data.get('effectType', ''),
+            effect_data.get('intensity', 0.0),
+            effect_data.get('durationMs', 0)
+        ))
+        conn.commit()
 
 # CORS設定
 app.add_middleware(
@@ -243,9 +327,16 @@ class ConnectionManager:
                 
                 # 集約処理を実行
                 effect = self.aggregation_engine.aggregate()
-                
+
                 # エフェクト指示があれば全クライアントに配信
                 if effect:
+                    # DBに記録
+                    try:
+                        log_effect(effect)
+                    except Exception as e:
+                        print(f"⚠️ エフェクトDB記録エラー: {e}")
+
+                    # ブロードキャスト
                     await self.broadcast(effect)
                     
             except Exception as e:
@@ -265,8 +356,9 @@ async def root():
     """ヘルスチェック"""
     return {
         "status": "running",
-        "service": "Live Reaction System - Step 4",
+        "service": "Live Reaction System - Step 7",
         "active_connections": len(manager.active_connections),
+        "database": str(DB_PATH),
         "timestamp": datetime.now().isoformat()
     }
 
@@ -295,12 +387,15 @@ async def websocket_endpoint(websocket: WebSocket):
         
         # 接続を管理リストに追加
         await manager.connect(websocket, user_id)
-        
+
+        # ユーザーをDBに登録（存在しない場合）
+        ensure_user_exists(user_id)
+
         # 接続確認メッセージを送信
         await websocket.send_json({
             "type": "connection_established",
             "userId": user_id,
-            "message": "WebSocket接続が確立されました（Step4: 集約処理有効）",
+            "message": "WebSocket接続が確立されました（Step7: DB記録有効）",
             "timestamp": datetime.now().isoformat()
         })
         
@@ -312,7 +407,13 @@ async def websocket_endpoint(websocket: WebSocket):
             
             # 受信データをログ出力（簡略版）
             print(f"📥 データ受信 ({user_id}): states={data.get('states', {})}, events={data.get('events', {})}")
-            
+
+            # データをDBに記録
+            try:
+                log_reaction(user_id, data)
+            except Exception as e:
+                print(f"⚠️ DB記録エラー ({user_id}): {e}")
+
             # データを集約エンジンに登録
             manager.update_reaction_data(user_id, data)
             
@@ -352,32 +453,75 @@ async def get_status():
 async def get_aggregation_debug():
     """集約データのデバッグ情報取得"""
     debug_info = {}
-    
+
     for user_id, user_reaction in manager.aggregation_engine.user_data.items():
         recent_samples = user_reaction.get_recent_samples()
         debug_info[user_id] = {
             "sample_count": len(recent_samples),
             "latest_sample": recent_samples[-1] if recent_samples else None
         }
-    
+
     return {
         "user_data": debug_info,
         "timestamp": datetime.now().isoformat()
     }
 
+@app.get("/debug/database")
+async def get_database_stats():
+    """データベース統計情報取得"""
+    try:
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+
+            # 各テーブルのレコード数を取得
+            cursor.execute("SELECT COUNT(*) FROM users")
+            users_count = cursor.fetchone()[0]
+
+            cursor.execute("SELECT COUNT(*) FROM reactions_log")
+            reactions_count = cursor.fetchone()[0]
+
+            cursor.execute("SELECT COUNT(*) FROM effects_log")
+            effects_count = cursor.fetchone()[0]
+
+            # 最新のレコードを取得
+            cursor.execute("SELECT * FROM reactions_log ORDER BY timestamp DESC LIMIT 5")
+            recent_reactions = cursor.fetchall()
+
+            cursor.execute("SELECT * FROM effects_log ORDER BY timestamp DESC LIMIT 5")
+            recent_effects = cursor.fetchall()
+
+            return {
+                "database_path": str(DB_PATH),
+                "stats": {
+                    "users": users_count,
+                    "reactions_log": reactions_count,
+                    "effects_log": effects_count
+                },
+                "recent_reactions": recent_reactions,
+                "recent_effects": recent_effects,
+                "timestamp": datetime.now().isoformat()
+            }
+    except Exception as e:
+        return {
+            "error": str(e),
+            "timestamp": datetime.now().isoformat()
+        }
+
 if __name__ == "__main__":
     import uvicorn
     print("=" * 60)
-    print("🚀 Live Reaction System - Backend Server (Step 6)")
+    print("🚀 Live Reaction System - Backend Server (Step 7)")
     print("=" * 60)
     print("📍 Server: http://localhost:8000")
     print("🔌 WebSocket: ws://localhost:8000/ws")
     print("📊 Status: http://localhost:8000/status")
     print("🐛 Debug: http://localhost:8000/debug/aggregation")
+    print("💾 Database: " + str(DB_PATH))
     print("=" * 60)
-    print("✨ Step 6機能:")
-    print("  - リアクション拡張: 笑顔、驚き、頷き、縦揺れ")
-    print("  - エフェクト拡張: sparkle, excitement, wave, bounce")
+    print("✨ Step 7機能:")
+    print("  - リアクション拡張: 笑顔、驚き、手上げ、頷き、縦揺れ")
+    print("  - エフェクト拡張: sparkle, excitement, wave, bounce, cheer")
     print("  - 優先順位付きエフェクト判定")
+    print("  - データベース記録: users, reactions_log, effects_log")
     print("=" * 60)
     uvicorn.run(app, host="0.0.0.0", port=8001, log_level="info")

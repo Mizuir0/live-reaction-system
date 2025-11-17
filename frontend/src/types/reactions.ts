@@ -37,3 +37,17 @@ export interface DetectionDebugInfo {
   headY: number;
   headYThreshold: number;
 }
+
+// エフェクト指示データ（サーバーからの受信）
+export interface EffectInstruction {
+  type: 'effect';
+  effectType: 'sparkle' | 'wave' | 'clapping_icons' | 'excitement' | 'bounce';
+  intensity: number;
+  durationMs: number;
+  timestamp: number;
+  debug?: {
+    activeUsers: number;
+    ratioState: Record<string, number>;
+    densityEvent: Record<string, number>;
+  };
+}

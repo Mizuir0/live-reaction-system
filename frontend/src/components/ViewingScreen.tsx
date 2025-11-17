@@ -4,9 +4,10 @@ import type { YouTubeProps } from 'react-youtube';
 import { useCamera } from '../hooks/useCamera';
 import { useMediaPipe } from '../hooks/useMediaPipe';
 import { useReactionDetection } from '../hooks/useReactionDetection';
+import { useWebSocket } from '../hooks/useWebSockets';
+import { useEffectRenderer } from '../hooks/useEffectRenderer';
 import DebugOverlay from './DebugOverlay';
 import type { ReactionStates, ReactionEvents } from '../types/reactions';
-import { useWebSocket } from '../hooks/useWebSockets';
 interface ViewingScreenProps {
   videoId: string | undefined;
   userId: string;
@@ -44,7 +45,10 @@ const ViewingScreen: React.FC<ViewingScreenProps> = ({ videoId, userId }) => {
   const { videoRef, isReady: cameraReady, error: cameraError, requestCamera } = useCamera();
   const { isReady: mediaPipeReady, detectFace, lastResult } = useMediaPipe();
   const { states, events, debugInfo, updateReactions, resetEvents } = useReactionDetection();
-  const { isConnected: wsConnected, error: wsError, sendReactionData, lastResponse } = useWebSocket(userId);
+  const { isConnected: wsConnected, error: wsError, sendReactionData, currentEffect } = useWebSocket(userId);
+
+  // エフェクトレンダラー
+  useEffectRenderer({ canvasRef, currentEffect });
   /**
    * カメラアクセスをリクエスト
    */
@@ -160,7 +164,7 @@ const ViewingScreen: React.FC<ViewingScreenProps> = ({ videoId, userId }) => {
   /**
    * YouTube プレイヤーの準備完了時の処理
    */
-  const onPlayerReady: YouTubeProps['onReady'] = (event) => {
+  const onPlayerReady: YouTubeProps['onReady'] = (_event) => {
     console.log('YouTube Player Ready');
     setPlayerReady(true);
   };
@@ -324,14 +328,14 @@ const ViewingScreen: React.FC<ViewingScreenProps> = ({ videoId, userId }) => {
       {/* デバッグ情報（開発用） */}
       <div style={styles.debugInfo}>
         <p style={styles.debugText}>
-          <strong>Step 3 完了:</strong> WebSocket通信 + リアクションデータ送信（1秒ごと）
+          <strong>Step 5 完了:</strong> エフェクト描画機能実装 ✨
         </p>
         <p style={styles.debugText}>
           <strong>接続状態:</strong> {wsConnected ? '✅ 接続中' : '❌ 未接続'}
-          {lastResponse && lastResponse.type === 'echo' && ' | 📥 Echoレスポンス受信'}
+          {currentEffect && ` | 🎨 エフェクト: ${currentEffect.effectType} (intensity: ${currentEffect.intensity.toFixed(2)})`}
         </p>
         <p style={styles.debugText}>
-          <strong>次のステップ:</strong> サーバー側の集約ロジック + エフェクト生成
+          <strong>実装済み:</strong> sparkle（笑顔）、wave（縦揺れ）エフェクト
         </p>
       </div>
     </div>

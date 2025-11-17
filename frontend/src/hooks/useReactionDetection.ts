@@ -49,6 +49,13 @@ export const useReactionDetection = (): UseReactionDetectionReturn => {
   const downStateStartTime = useRef<number>(0); // down状態開始時刻
   const nodState = useRef<'neutral' | 'down'>('neutral');
 
+  // 縦揺れ検出用の状態管理
+  const swayYHistory = useRef<number[]>([]);
+  const prevSwayY = useRef<number>(0);
+  const lastSwayTime = useRef<number>(0);
+  const swayDownStartTime = useRef<number>(0);
+  const swayState = useRef<'neutral' | 'down'>('neutral');
+
   /**
    * 笑顔検出（ステート型）
    */
@@ -57,7 +64,7 @@ export const useReactionDetection = (): UseReactionDetectionReturn => {
 
     // BlendShapes から笑顔関連の値を取得
     const categories = blendshapes[0].categories;
-    
+
     const mouthSmileLeft = categories.find((c: any) => c.categoryName === 'mouthSmileLeft')?.score || 0;
     const mouthSmileRight = categories.find((c: any) => c.categoryName === 'mouthSmileRight')?.score || 0;
 
@@ -71,6 +78,26 @@ export const useReactionDetection = (): UseReactionDetectionReturn => {
     // 両方が閾値を超えたら笑顔と判定
     const SMILE_THRESHOLD = 0.5;
     return mouthSmileLeft > SMILE_THRESHOLD && mouthSmileRight > SMILE_THRESHOLD;
+  };
+
+  /**
+   * 驚き検出（ステート型）
+   */
+  const detectSurprise = (blendshapes: any): boolean => {
+    if (!blendshapes || blendshapes.length === 0) return false;
+
+    const categories = blendshapes[0].categories;
+
+    const eyeWideLeft = categories.find((c: any) => c.categoryName === 'eyeWideLeft')?.score || 0;
+    const eyeWideRight = categories.find((c: any) => c.categoryName === 'eyeWideRight')?.score || 0;
+    const jawOpen = categories.find((c: any) => c.categoryName === 'jawOpen')?.score || 0;
+
+    // 目を見開いている かつ 口が開いている
+    const EYE_WIDE_THRESHOLD = 0.5;
+    const JAW_OPEN_THRESHOLD = 0.3;
+
+    return (eyeWideLeft > EYE_WIDE_THRESHOLD && eyeWideRight > EYE_WIDE_THRESHOLD) &&
+           jawOpen > JAW_OPEN_THRESHOLD;
   };
 
   /**

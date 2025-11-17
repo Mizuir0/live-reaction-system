@@ -1,11 +1,12 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import type { ReactionData } from '../types/reactions';
+import type { ReactionData, EffectInstruction } from '../types/reactions';
 
 interface UseWebSocketReturn {
   isConnected: boolean;
   error: string | null;
   sendReactionData: (data: Omit<ReactionData, 'userId' | 'timestamp'>) => void;
   lastResponse: any;
+  currentEffect: EffectInstruction | null;
 }
 
 /**
@@ -15,7 +16,8 @@ export const useWebSocket = (userId: string): UseWebSocketReturn => {
   const [isConnected, setIsConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastResponse, setLastResponse] = useState<any>(null);
-  
+  const [currentEffect, setCurrentEffect] = useState<EffectInstruction | null>(null);
+
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<number | null>(null);
   const reconnectAttempts = useRef<number>(0);
@@ -53,6 +55,13 @@ export const useWebSocket = (userId: string): UseWebSocketReturn => {
             console.log('🎉 接続確立:', data.message);
           } else if (data.type === 'echo') {
             console.log('🔄 Echoレスポンス受信:', data.original);
+          } else if (data.type === 'effect') {
+            // エフェクト指示を受信
+            console.log('✨ エフェクト指示受信:', data.effectType, 'intensity:', data.intensity);
+            setCurrentEffect(data as EffectInstruction);
+          } else if (data.type === 'data_received') {
+            // データ受信確認（デバッグ用）
+            // console.log('✅ データ受信確認:', data.message);
           }
         } catch (err) {
           console.error('❌ メッセージのパースエラー:', err);
@@ -133,6 +142,7 @@ export const useWebSocket = (userId: string): UseWebSocketReturn => {
     isConnected,
     error,
     sendReactionData,
-    lastResponse
+    lastResponse,
+    currentEffect
   };
 };

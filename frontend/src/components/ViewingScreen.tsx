@@ -9,6 +9,9 @@ import { useWebSocket } from '../hooks/useWebSockets';
 import { useEffectRenderer } from '../hooks/useEffectRenderer';
 import DebugOverlay from './DebugOverlay';
 import type { ReactionStates, ReactionEvents } from '../types/reactions';
+// 実験グループタイプ（debugは開発用）
+export type ExperimentGroup = 'experiment' | 'control1' | 'control2' | 'debug';
+
 interface ViewingScreenProps {
   videoId: string | undefined;
   userId: string;
@@ -21,10 +24,22 @@ interface ViewingScreenProps {
 const ViewingScreen: React.FC<ViewingScreenProps> = ({ videoId, userId }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [playerReady, setPlayerReady] = useState(false);
-  const [showDebug, setShowDebug] = useState(true);
+  const [showDebug, setShowDebug] = useState(false); // デフォルトは非表示
   const [showLandmarks, setShowLandmarks] = useState(false); // ランドマーク表示
   const detectionIntervalRef = useRef<number | null>(null);
   const sendIntervalRef = useRef<number | null>(null);
+
+  // URLからグループを取得
+  const getExperimentGroup = (): ExperimentGroup => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const group = urlParams.get('group');
+    if (group === 'experiment' || group === 'control1' || group === 'control2' || group === 'debug') {
+      return group;
+    }
+    return 'control2'; // デフォルトはエフェクトなし
+  };
+  const experimentGroup = getExperimentGroup();
+  const isDebugMode = experimentGroup === 'debug';
   
   // 最新のstatesとeventsを保持するref
   const statesRef = useRef<ReactionStates>({
@@ -53,7 +68,7 @@ const ViewingScreen: React.FC<ViewingScreenProps> = ({ videoId, userId }) => {
     startAudio,
     stopAudio
   } = useAudioDetection();
-  const { isConnected: wsConnected, error: wsError, sendReactionData, currentEffect } = useWebSocket(userId);
+  const { isConnected: wsConnected, error: wsError, sendReactionData, currentEffect } = useWebSocket(userId, experimentGroup);
 
   // エフェクトレンダラー
   useEffectRenderer({ canvasRef, currentEffect });
@@ -249,8 +264,8 @@ const ViewingScreen: React.FC<ViewingScreenProps> = ({ videoId, userId }) => {
           />
         </div>
 
-        {/* デバッグオーバーレイ */}
-        {showDebug && (
+        {/* デバッグオーバーレイ（debugモードのみ） */}
+        {isDebugMode && showDebug && (
           <DebugOverlay
             videoRef={videoRef as unknown as React.RefObject<HTMLVideoElement>}
             detectionResult={lastResult}
@@ -264,117 +279,121 @@ const ViewingScreen: React.FC<ViewingScreenProps> = ({ videoId, userId }) => {
         )}
       </div>
 
-      {/* ステータスバー */}
-      <div style={styles.statusBar}>
-        <div style={styles.statusLeft}>
-          <span style={styles.statusLabel}>ユーザーID:</span>
-          <span style={styles.statusValue}>{userId.substring(0, 15)}...</span>
-        </div>
-        
-        <div style={styles.statusCenter}>
-          <div style={styles.statusItem}>
-            <span style={styles.statusLabel}>プレイヤー:</span>
+      {/* ステータスバー（debugモードのみ詳細表示） */}
+      {isDebugMode ? (
+        <div style={styles.statusBar}>
+          <div style={styles.statusLeft}>
+            <span style={styles.statusLabel}>グループ:</span>
             <span style={{
               ...styles.statusValue,
-              color: playerReady ? '#4caf50' : '#ff9800'
+              color: '#9c27b0',
+              fontWeight: 'bold'
             }}>
-              {playerReady ? '準備完了' : '読み込み中'}
+              DEBUG
             </span>
           </div>
-          <div style={styles.statusItem}>
-            <span style={styles.statusLabel}>カメラ:</span>
-            <span style={{
-              ...styles.statusValue,
-              color: cameraReady ? '#4caf50' : cameraError ? '#f44336' : '#ff9800'
-            }}>
-              {cameraReady ? '✓' : cameraError ? '✗' : '...'}
-            </span>
-          </div>
-          <div style={styles.statusItem}>
-            <span style={styles.statusLabel}>MediaPipe:</span>
-            <span style={{
-              ...styles.statusValue,
-              color: mediaPipeReady ? '#4caf50' : '#ff9800'
-            }}>
-              {mediaPipeReady ? '✓' : '...'}
-            </span>
-          </div>
-          <div style={styles.statusItem}>
-            <span style={styles.statusLabel}>WebSocket:</span>
-            <span style={{
-              ...styles.statusValue,
-              color: wsConnected ? '#4caf50' : wsError ? '#f44336' : '#ff9800'
-            }}>
-              {wsConnected ? '✓' : wsError ? '✗' : '...'}
-            </span>
-          </div>
-          <div style={styles.statusItem}>
-            <span style={styles.statusLabel}>🎤 Audio:</span>
-            <span style={{
-              ...styles.statusValue,
-              color: audioDebugInfo.isActive ? '#4caf50' : audioDebugInfo.error ? '#f44336' : '#ff9800'
-            }}>
-              {audioDebugInfo.isActive ? '✓' : audioDebugInfo.error ? '✗' : '...'}
-            </span>
-          </div>
-        </div>
 
-        <div style={styles.statusRight}>
-          <span style={styles.statusLabel}>リアクション送信:</span>
-          <span style={{
-            ...styles.statusValue,
-            color: isReactionActive ? '#4caf50' : '#999',
-            fontWeight: 'bold'
-          }}>
-            {isReactionActive ? 'ON' : 'OFF'}
-          </span>
-          
-          <button
-            onClick={() => setShowDebug(!showDebug)}
-            style={styles.debugToggle}
-          >
-            {showDebug ? '🔍 デバッグ表示中' : '👁️ デバッグを表示'}
-          </button>
+          <div style={styles.statusCenter}>
+            <div style={styles.statusItem}>
+              <span style={styles.statusLabel}>プレイヤー:</span>
+              <span style={{
+                ...styles.statusValue,
+                color: playerReady ? '#4caf50' : '#ff9800'
+              }}>
+                {playerReady ? '準備完了' : '読み込み中'}
+              </span>
+            </div>
+            <div style={styles.statusItem}>
+              <span style={styles.statusLabel}>カメラ:</span>
+              <span style={{
+                ...styles.statusValue,
+                color: cameraReady ? '#4caf50' : cameraError ? '#f44336' : '#ff9800'
+              }}>
+                {cameraReady ? '✓' : cameraError ? '✗' : '...'}
+              </span>
+            </div>
+            <div style={styles.statusItem}>
+              <span style={styles.statusLabel}>MediaPipe:</span>
+              <span style={{
+                ...styles.statusValue,
+                color: mediaPipeReady ? '#4caf50' : '#ff9800'
+              }}>
+                {mediaPipeReady ? '✓' : '...'}
+              </span>
+            </div>
+            <div style={styles.statusItem}>
+              <span style={styles.statusLabel}>WebSocket:</span>
+              <span style={{
+                ...styles.statusValue,
+                color: wsConnected ? '#4caf50' : wsError ? '#f44336' : '#ff9800'
+              }}>
+                {wsConnected ? '✓' : wsError ? '✗' : '...'}
+              </span>
+            </div>
+            <div style={styles.statusItem}>
+              <span style={styles.statusLabel}>🎤 Audio:</span>
+              <span style={{
+                ...styles.statusValue,
+                color: audioDebugInfo.isActive ? '#4caf50' : audioDebugInfo.error ? '#f44336' : '#ff9800'
+              }}>
+                {audioDebugInfo.isActive ? '✓' : audioDebugInfo.error ? '✗' : '...'}
+              </span>
+            </div>
+          </div>
 
-          {showDebug && (
+          <div style={styles.statusRight}>
+            <span style={styles.statusLabel}>リアクション送信:</span>
+            <span style={{
+              ...styles.statusValue,
+              color: isReactionActive ? '#4caf50' : '#999',
+              fontWeight: 'bold'
+            }}>
+              {isReactionActive ? 'ON' : 'OFF'}
+            </span>
+
             <button
-              onClick={() => setShowLandmarks(!showLandmarks)}
-              style={{
-                ...styles.debugToggle,
-                backgroundColor: showLandmarks ? '#4caf50' : '#333'
-              }}
+              onClick={() => setShowDebug(!showDebug)}
+              style={styles.debugToggle}
             >
-              {showLandmarks ? '● ランドマーク表示中' : '○ ランドマーク非表示'}
+              {showDebug ? '🔍 デバッグ表示中' : '👁️ デバッグを表示'}
             </button>
-          )}
-        </div>
-      </div>
 
-      {/* エラー表示 */}
-      {cameraError && (
+            {showDebug && (
+              <button
+                onClick={() => setShowLandmarks(!showLandmarks)}
+                style={{
+                  ...styles.debugToggle,
+                  backgroundColor: showLandmarks ? '#4caf50' : '#333'
+                }}
+              >
+                {showLandmarks ? '● ランドマーク表示中' : '○ ランドマーク非表示'}
+              </button>
+            )}
+          </div>
+        </div>
+      ) : null}
+
+      {/* エラー表示（debugモードのみ） */}
+      {isDebugMode && cameraError && (
         <div style={styles.errorBanner}>
           ⚠️ カメラ: {cameraError}
         </div>
       )}
-      {wsError && !wsConnected && (
+      {isDebugMode && wsError && !wsConnected && (
         <div style={{...styles.errorBanner, top: '55%'}}>
           ⚠️ WebSocket: {wsError}
         </div>
       )}
 
-      {/* デバッグ情報（開発用） */}
-      <div style={styles.debugInfo}>
-        <p style={styles.debugText}>
-          <strong>Step 6 完了:</strong> リアクション・エフェクト拡張 🎉
-        </p>
-        <p style={styles.debugText}>
-          <strong>接続状態:</strong> {wsConnected ? '✅ 接続中' : '❌ 未接続'}
-          {currentEffect && ` | 🎨 エフェクト: ${currentEffect.effectType} (intensity: ${currentEffect.intensity.toFixed(2)})`}
-        </p>
-        <p style={styles.debugText}>
-          <strong>実装済み:</strong> 笑顔→sparkle、驚き→excitement、頷き→wave、縦揺れ→bounce
-        </p>
-      </div>
+      {/* デバッグ情報（debugモードのみ） */}
+      {isDebugMode && (
+        <div style={styles.debugInfo}>
+          <p style={styles.debugText}>
+            <strong>接続状態:</strong> {wsConnected ? '✅ 接続中' : '❌ 未接続'}
+            {currentEffect && ` | 🎨 エフェクト: ${currentEffect.effectType} (intensity: ${currentEffect.intensity.toFixed(2)})`}
+          </p>
+        </div>
+      )}
     </div>
   );
 };

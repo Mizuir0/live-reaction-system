@@ -9,6 +9,7 @@ import time
 import sqlite3
 from pathlib import Path
 from contextlib import contextmanager
+import random
 
 app = FastAPI(title="Live Reaction System API - Step 7")
 
@@ -28,22 +29,30 @@ def get_db_connection():
     finally:
         conn.close()
 
-def ensure_user_exists(user_id: str):
-    """ユーザーが存在しない場合はusersテーブルに追加"""
+def ensure_user_exists(user_id: str, experiment_group: str = 'control2'):
+    """ユーザーが存在しない場合はusersテーブルに追加、存在する場合はグループを更新"""
     with get_db_connection() as conn:
         cursor = conn.cursor()
 
         # ユーザーが存在するかチェック
         cursor.execute("SELECT id FROM users WHERE id = ?", (user_id,))
         if cursor.fetchone() is None:
-            # 新規ユーザーを追加（デフォルトはexperimental群）
+            # 新規ユーザーを追加
             created_at = int(time.time() * 1000)
             cursor.execute(
                 "INSERT INTO users (id, experiment_group, created_at) VALUES (?, ?, ?)",
-                (user_id, 'experimental', created_at)
+                (user_id, experiment_group, created_at)
             )
             conn.commit()
-            print(f"✅ 新規ユーザーをDBに登録: {user_id}")
+            print(f"✅ 新規ユーザーをDBに登録: {user_id} (group: {experiment_group})")
+        else:
+            # 既存ユーザーのグループを更新
+            cursor.execute(
+                "UPDATE users SET experiment_group = ? WHERE id = ?",
+                (experiment_group, user_id)
+            )
+            conn.commit()
+            print(f"✅ ユーザーのグループを更新: {user_id} (group: {experiment_group})")
 
 def log_reaction(user_id: str, data: dict):
     """リアクションデータをreactions_logに記録"""
@@ -291,15 +300,23 @@ class AggregationEngine:
 # 接続管理
 # ========================
 
+# ランダムエフェクト用の定数
+EFFECT_TYPES = ['sparkle', 'wave', 'excitement', 'bounce', 'cheer', 'shimmer', 'focus', 'groove', 'clapping_icons']
+RANDOM_EFFECT_INTERVAL = 5  # ランダムエフェクトの発動間隔（秒）
+
 class ConnectionManager:
     def __init__(self):
         self.active_connections: Dict[str, WebSocket] = {}
+        self.user_groups: Dict[str, str] = {}  # ユーザーごとの実験グループ
         self.aggregation_engine = AggregationEngine()
         self.aggregation_task = None
-    
-    async def connect(self, websocket: WebSocket, user_id: str):
+        self.random_effect_task = None
+        self.last_random_effect_time = time.time()
+
+    async def connect(self, websocket: WebSocket, user_id: str, experiment_group: str = 'control2'):
         self.active_connections[user_id] = websocket
-        print(f"✅ クライアント接続: {user_id} (合計: {len(self.active_connections)})")
+        self.user_groups[user_id] = experiment_group
+        print(f"✅ クライアント接続: {user_id} (group: {experiment_group}, 合計: {len(self.active_connections)})")
         
         # 集約タスクを開始（まだ開始していない場合）
         if self.aggregation_task is None:
@@ -309,7 +326,9 @@ class ConnectionManager:
     def disconnect(self, user_id: str):
         if user_id in self.active_connections:
             del self.active_connections[user_id]
-            print(f"❌ クライアント切断: {user_id} (合計: {len(self.active_connections)})")
+        if user_id in self.user_groups:
+            del self.user_groups[user_id]
+        print(f"❌ クライアント切断: {user_id} (合計: {len(self.active_connections)})")
     
     async def send_personal_message(self, message: dict, user_id: str):
         """特定のクライアントにメッセージを送信"""
@@ -323,20 +342,58 @@ class ConnectionManager:
     async def broadcast(self, message: dict):
         """全クライアントにメッセージをブロードキャスト"""
         disconnected_users = []
-        
+
         for user_id, connection in self.active_connections.items():
             try:
                 await connection.send_json(message)
             except Exception as e:
                 print(f"⚠️ ブロードキャスト送信エラー ({user_id}): {e}")
                 disconnected_users.append(user_id)
-        
+
         # 切断されたクライアントを削除
         for user_id in disconnected_users:
             self.disconnect(user_id)
-            
+
         if message.get('type') == 'effect':
             print(f"📡 エフェクト指示を{len(self.active_connections)}クライアントに配信")
+
+    async def broadcast_to_group(self, message: dict, target_group: str):
+        """特定のグループにのみメッセージをブロードキャスト"""
+        disconnected_users = []
+        sent_count = 0
+
+        for user_id, connection in self.active_connections.items():
+            if self.user_groups.get(user_id) == target_group:
+                try:
+                    await connection.send_json(message)
+                    sent_count += 1
+                except Exception as e:
+                    print(f"⚠️ グループ送信エラー ({user_id}): {e}")
+                    disconnected_users.append(user_id)
+
+        # 切断されたクライアントを削除
+        for user_id in disconnected_users:
+            self.disconnect(user_id)
+
+        if message.get('type') == 'effect' and sent_count > 0:
+            print(f"📡 エフェクト指示を{target_group}グループの{sent_count}クライアントに配信")
+
+    def generate_random_effect(self) -> dict:
+        """ランダムなエフェクトを生成（対照群1用）"""
+        effect_type = random.choice(EFFECT_TYPES)
+        intensity = random.uniform(0.5, 1.0)
+
+        return {
+            "type": "effect",
+            "effectType": effect_type,
+            "intensity": intensity,
+            "durationMs": 2000,
+            "timestamp": int(time.time() * 1000),
+            "debug": {
+                "isRandom": True,
+                "group": "control1"
+            }
+        }
     
     def update_reaction_data(self, user_id: str, data: dict):
         """リアクションデータを集約エンジンに渡す"""
@@ -345,30 +402,64 @@ class ConnectionManager:
     async def run_aggregation_loop(self):
         """1秒ごとに集約処理を実行するループ"""
         print("🔄 集約ループ開始")
-        
+
         while True:
             try:
                 # 1秒待機
                 await asyncio.sleep(1.0)
-                
+
                 # アクティブな接続がない場合はスキップ
                 if not self.active_connections:
                     continue
-                
-                # 集約処理を実行
-                effect = self.aggregation_engine.aggregate()
 
-                # エフェクト指示があれば全クライアントに配信
-                if effect:
-                    # DBに記録
-                    try:
-                        log_effect(effect)
-                    except Exception as e:
-                        print(f"⚠️ エフェクトDB記録エラー: {e}")
+                current_time = time.time()
 
-                    # ブロードキャスト
-                    await self.broadcast(effect)
-                    
+                # ========================
+                # 実験群（experiment）とデバッグ群（debug）: リアクションベースのエフェクト
+                # ========================
+                experiment_users = [uid for uid, grp in self.user_groups.items() if grp in ['experiment', 'debug']]
+                if experiment_users:
+                    # 集約処理を実行
+                    effect = self.aggregation_engine.aggregate()
+
+                    # エフェクト指示があれば実験群・デバッグ群クライアントに配信
+                    if effect:
+                        # DBに記録
+                        try:
+                            log_effect(effect)
+                        except Exception as e:
+                            print(f"⚠️ エフェクトDB記録エラー: {e}")
+
+                        # 実験群にブロードキャスト
+                        await self.broadcast_to_group(effect, 'experiment')
+                        # デバッグ群にもブロードキャスト
+                        await self.broadcast_to_group(effect, 'debug')
+
+                # ========================
+                # 対照群1（control1）: ランダムエフェクト
+                # ========================
+                control1_users = [uid for uid, grp in self.user_groups.items() if grp == 'control1']
+                if control1_users:
+                    # 一定間隔でランダムエフェクトを発動
+                    if current_time - self.last_random_effect_time >= RANDOM_EFFECT_INTERVAL:
+                        random_effect = self.generate_random_effect()
+
+                        # DBに記録
+                        try:
+                            log_effect(random_effect)
+                        except Exception as e:
+                            print(f"⚠️ ランダムエフェクトDB記録エラー: {e}")
+
+                        # 対照群1のみにブロードキャスト
+                        await self.broadcast_to_group(random_effect, 'control1')
+                        self.last_random_effect_time = current_time
+                        print(f"🎲 ランダムエフェクト発動: {random_effect['effectType']}")
+
+                # ========================
+                # 対照群2（control2）: エフェクトなし
+                # ========================
+                # 何も送信しない
+
             except Exception as e:
                 print(f"❌ 集約ループエラー: {e}")
                 import traceback
@@ -399,33 +490,40 @@ async def websocket_endpoint(websocket: WebSocket):
     Step 4: リアクションデータを受信し、集約してエフェクト判定
     """
     user_id = None
-    
+    experiment_group = 'control2'
+
     try:
         # 接続受け入れ
         await websocket.accept()
         print("🔌 WebSocket接続待機中...")
-        
-        # 最初のメッセージでuser_idを取得
+
+        # 最初のメッセージでuser_idとexperiment_groupを取得
         first_message = await websocket.receive_text()
         data = json.loads(first_message)
         user_id = data.get("userId")
-        
+        experiment_group = data.get("experimentGroup", "control2")
+
+        # グループ名の検証（debugは実験群と同じ動作）
+        if experiment_group not in ['experiment', 'control1', 'control2', 'debug']:
+            experiment_group = 'control2'
+
         if not user_id:
             print("⚠️ user_idがありません。接続を閉じます。")
             await websocket.close()
             return
-        
+
         # 接続を管理リストに追加
-        await manager.connect(websocket, user_id)
+        await manager.connect(websocket, user_id, experiment_group)
 
         # ユーザーをDBに登録（存在しない場合）
-        ensure_user_exists(user_id)
+        ensure_user_exists(user_id, experiment_group)
 
         # 接続確認メッセージを送信
         await websocket.send_json({
             "type": "connection_established",
             "userId": user_id,
-            "message": "WebSocket接続が確立されました（Step7: DB記録有効）",
+            "experimentGroup": experiment_group,
+            "message": f"WebSocket接続が確立されました（グループ: {experiment_group}）",
             "timestamp": datetime.now().isoformat()
         })
         
@@ -469,9 +567,17 @@ async def websocket_endpoint(websocket: WebSocket):
 @app.get("/status")
 async def get_status():
     """システムステータス取得（デバッグ用）"""
+    # グループ別のユーザー数を集計
+    group_counts = {'experiment': 0, 'control1': 0, 'control2': 0}
+    for user_id, group in manager.user_groups.items():
+        if group in group_counts:
+            group_counts[group] += 1
+
     return {
         "active_connections": len(manager.active_connections),
         "connected_users": list(manager.active_connections.keys()),
+        "user_groups": manager.user_groups,
+        "group_counts": group_counts,
         "aggregation_data": {
             "total_users": len(manager.aggregation_engine.user_data),
             "user_ids": list(manager.aggregation_engine.user_data.keys())

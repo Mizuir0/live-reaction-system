@@ -1,6 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import type { ReactionData, EffectInstruction } from '../types/reactions';
 
+// 実験グループタイプ（debugは開発用）
+type ExperimentGroup = 'experiment' | 'control1' | 'control2' | 'debug';
+
 interface UseWebSocketReturn {
   isConnected: boolean;
   error: string | null;
@@ -11,8 +14,10 @@ interface UseWebSocketReturn {
 
 /**
  * WebSocket接続を管理するカスタムフック
+ * @param userId ユーザーID
+ * @param experimentGroup 実験グループ ('experiment' | 'control1' | 'control2')
  */
-export const useWebSocket = (userId: string): UseWebSocketReturn => {
+export const useWebSocket = (userId: string, experimentGroup: ExperimentGroup = 'control2'): UseWebSocketReturn => {
   const [isConnected, setIsConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastResponse, setLastResponse] = useState<any>(null);
@@ -41,8 +46,9 @@ export const useWebSocket = (userId: string): UseWebSocketReturn => {
         setError(null);
         reconnectAttempts.current = 0;
 
-        // 最初のメッセージでuserIdを送信
-        ws.send(JSON.stringify({ userId }));
+        // 最初のメッセージでuserIdとexperimentGroupを送信
+        ws.send(JSON.stringify({ userId, experimentGroup }));
+        console.log(`📋 実験グループ: ${experimentGroup}`);
       };
 
       ws.onmessage = (event) => {
@@ -95,7 +101,7 @@ export const useWebSocket = (userId: string): UseWebSocketReturn => {
       console.error('❌ WebSocket接続エラー:', err);
       setError('WebSocket接続に失敗しました');
     }
-  }, [userId]);
+  }, [userId, experimentGroup]);
 
   /**
    * リアクションデータを送信

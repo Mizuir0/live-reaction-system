@@ -10,7 +10,11 @@ import random
 import os
 
 # データベース接続をインポート
-from app.database import get_db_connection, init_database
+from app.database import get_db_connection, init_database, DB_TYPE, DATABASE_URL
+try:
+    from app.database import DB_PATH
+except ImportError:
+    DB_PATH = None  # PostgreSQLの場合はNone
 
 app = FastAPI(title="Live Reaction System API - Step 7")
 
@@ -470,11 +474,12 @@ manager = ConnectionManager()
 @app.get("/")
 async def root():
     """ヘルスチェック"""
+    db_info = str(DB_PATH) if DB_PATH else f"{DB_TYPE} (DATABASE_URL)"
     return {
         "status": "running",
         "service": "Live Reaction System - Step 7",
         "active_connections": len(manager.active_connections),
-        "database": str(DB_PATH),
+        "database": db_info,
         "timestamp": datetime.now().isoformat()
     }
 
@@ -621,8 +626,9 @@ async def get_database_stats():
             cursor.execute("SELECT * FROM effects_log ORDER BY timestamp DESC LIMIT 5")
             recent_effects = cursor.fetchall()
 
+            db_info = str(DB_PATH) if DB_PATH else f"{DB_TYPE} (DATABASE_URL)"
             return {
-                "database_path": str(DB_PATH),
+                "database_path": db_info,
                 "stats": {
                     "users": users_count,
                     "reactions_log": reactions_count,
@@ -647,7 +653,8 @@ if __name__ == "__main__":
     print("🔌 WebSocket: ws://localhost:8000/ws")
     print("📊 Status: http://localhost:8000/status")
     print("🐛 Debug: http://localhost:8000/debug/aggregation")
-    print("💾 Database: " + str(DB_PATH))
+    db_info = str(DB_PATH) if DB_PATH else f"{DB_TYPE} (DATABASE_URL)"
+    print("💾 Database: " + db_info)
     print("=" * 60)
     print("✨ Step 7機能:")
     print("  - リアクション拡張: 笑顔、驚き、手上げ、頷き、縦揺れ")

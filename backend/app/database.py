@@ -17,6 +17,7 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 # データベースタイプを判定
 if DATABASE_URL and DATABASE_URL.startswith("postgresql"):
     DB_TYPE = "postgresql"
+    DB_PATH = None  # PostgreSQLの場合はパスなし
     import psycopg2
     from psycopg2.extras import RealDictCursor
 else:

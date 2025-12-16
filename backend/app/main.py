@@ -109,14 +109,14 @@ allowed_origins = [
 if FRONTEND_URL and FRONTEND_URL not in allowed_origins:
     allowed_origins.append(FRONTEND_URL)
 
-# デバッグ: 一時的に全て許可（接続確認後に削除すること）
+# CORS設定（本番環境）
 print(f"🔧 FRONTEND_URL: {FRONTEND_URL}")
 print(f"🔧 許可されたオリジン: {allowed_origins}")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # 一時的に全て許可
-    allow_credentials=False,  # "*"の場合はFalseにする必要がある
+    allow_origins=allowed_origins,  # 指定されたオリジンのみ許可
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )

@@ -98,13 +98,23 @@ def log_effect(effect_data: dict):
 
 # CORS設定
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
+
+# 許可するオリジンのリストを作成
+allowed_origins = [
+    "http://localhost:3000",  # ローカル開発
+    "http://localhost:5173",  # Vite開発サーバー
+]
+
+# FRONTEND_URLが設定されていれば追加
+if FRONTEND_URL and FRONTEND_URL not in allowed_origins:
+    allowed_origins.append(FRONTEND_URL)
+
+# デバッグ: 一時的に全て許可（接続確認後に削除すること）
+print(f"🔧 許可されたオリジン: {allowed_origins}")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",  # ローカル開発
-        FRONTEND_URL,  # 本番環境（Vercel等）
-        "https://*.vercel.app",  # Vercelプレビュー環境
-    ],
+    allow_origins=["*"],  # 一時的に全て許可
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

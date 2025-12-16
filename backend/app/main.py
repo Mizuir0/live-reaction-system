@@ -6,28 +6,18 @@ import json
 import asyncio
 from datetime import datetime, timedelta
 import time
-import sqlite3
-from pathlib import Path
-from contextlib import contextmanager
 import random
+import os
+
+# データベース接続をインポート
+from app.database import get_db_connection, init_database
 
 app = FastAPI(title="Live Reaction System API - Step 7")
 
 # ========================
 # データベース設定
 # ========================
-
-DB_DIR = Path(__file__).parent.parent / "data"
-DB_PATH = DB_DIR / "live_reaction.db"
-
-@contextmanager
-def get_db_connection():
-    """データベース接続のコンテキストマネージャー"""
-    conn = sqlite3.connect(DB_PATH)
-    try:
-        yield conn
-    finally:
-        conn.close()
+# database.pyで管理
 
 def ensure_user_exists(user_id: str, experiment_group: str = 'control2'):
     """ユーザーが存在しない場合はusersテーブルに追加、存在する場合はグループを更新"""
@@ -35,12 +25,12 @@ def ensure_user_exists(user_id: str, experiment_group: str = 'control2'):
         cursor = conn.cursor()
 
         # ユーザーが存在するかチェック
-        cursor.execute("SELECT id FROM users WHERE id = ?", (user_id,))
+        cursor.execute("SELECT id FROM users WHERE id = %s", (user_id,))
         if cursor.fetchone() is None:
             # 新規ユーザーを追加
             created_at = int(time.time() * 1000)
             cursor.execute(
-                "INSERT INTO users (id, experiment_group, created_at) VALUES (?, ?, ?)",
+                "INSERT INTO users (id, experiment_group, created_at) VALUES (%s, %s, %s)",
                 (user_id, experiment_group, created_at)
             )
             conn.commit()
@@ -48,7 +38,7 @@ def ensure_user_exists(user_id: str, experiment_group: str = 'control2'):
         else:
             # 既存ユーザーのグループを更新
             cursor.execute(
-                "UPDATE users SET experiment_group = ? WHERE id = ?",
+                "UPDATE users SET experiment_group = %s WHERE id = %s",
                 (experiment_group, user_id)
             )
             conn.commit()
@@ -68,7 +58,7 @@ def log_reaction(user_id: str, data: dict):
                 user_id, timestamp,
                 is_smiling, is_surprised, is_concentrating, is_hand_up,
                 nod_count, sway_vertical_count, cheer_count, clap_count
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """, (
             user_id,
             timestamp,
@@ -93,7 +83,7 @@ def log_effect(effect_data: dict):
         cursor.execute("""
             INSERT INTO effects_log (
                 timestamp, effect_type, intensity, duration_ms
-            ) VALUES (?, ?, ?, ?)
+            ) VALUES (%s, %s, %s, %s)
         """, (
             timestamp,
             effect_data.get('effectType', ''),
@@ -103,9 +93,14 @@ def log_effect(effect_data: dict):
         conn.commit()
 
 # CORS設定
+FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=[
+        "http://localhost:3000",  # ローカル開発
+        FRONTEND_URL,  # 本番環境（Vercel等）
+        "https://*.vercel.app",  # Vercelプレビュー環境
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

@@ -36,8 +36,12 @@ export const useWebSocket = (userId: string, experimentGroup: ExperimentGroup = 
   const connect = useCallback(() => {
     try {
       console.log('🔌 WebSocket接続を開始...');
-      
-      const ws = new WebSocket('ws://localhost:8001/ws');
+
+      // 環境変数からWebSocket URLを取得（デフォルトはローカル）
+      const wsUrl = import.meta.env.VITE_WS_URL || 'ws://localhost:8001/ws';
+      console.log(`🔗 接続先: ${wsUrl}`);
+
+      const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
 
       ws.onopen = () => {

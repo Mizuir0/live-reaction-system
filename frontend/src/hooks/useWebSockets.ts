@@ -4,12 +4,20 @@ import type { ReactionData, EffectInstruction } from '../types/reactions';
 // 実験グループタイプ（debugは開発用）
 type ExperimentGroup = 'experiment' | 'control1' | 'control2' | 'debug';
 
+interface VideoSyncEvent {
+  type: 'video_play' | 'video_pause' | 'video_seek';
+  currentTime: number;
+  timestamp: number;
+}
+
 interface UseWebSocketReturn {
   isConnected: boolean;
   error: string | null;
   sendReactionData: (data: Omit<ReactionData, 'userId' | 'timestamp'>) => void;
+  sendVideoEvent: (type: 'video_play' | 'video_pause' | 'video_seek', currentTime: number) => void;
   lastResponse: any;
   currentEffect: EffectInstruction | null;
+  videoSyncEvent: VideoSyncEvent | null;
 }
 
 /**
@@ -22,6 +30,7 @@ export const useWebSocket = (userId: string, experimentGroup: ExperimentGroup = 
   const [error, setError] = useState<string | null>(null);
   const [lastResponse, setLastResponse] = useState<any>(null);
   const [currentEffect, setCurrentEffect] = useState<EffectInstruction | null>(null);
+  const [videoSyncEvent, setVideoSyncEvent] = useState<VideoSyncEvent | null>(null);
 
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<number | null>(null);
@@ -72,6 +81,14 @@ export const useWebSocket = (userId: string, experimentGroup: ExperimentGroup = 
           } else if (data.type === 'data_received') {
             // データ受信確認（デバッグ用）
             // console.log('✅ データ受信確認:', data.message);
+          } else if (data.type === 'video_play' || data.type === 'video_pause' || data.type === 'video_seek') {
+            // 動画同期イベントを受信
+            console.log('🎬 動画同期イベント受信:', data.type, 'time:', data.currentTime);
+            setVideoSyncEvent({
+              type: data.type,
+              currentTime: data.currentTime,
+              timestamp: data.timestamp
+            });
           }
         } catch (err) {
           console.error('❌ メッセージのパースエラー:', err);
@@ -131,6 +148,29 @@ export const useWebSocket = (userId: string, experimentGroup: ExperimentGroup = 
   }, [userId]);
 
   /**
+   * 動画同期イベントを送信（control2群のホスト用）
+   */
+  const sendVideoEvent = useCallback((type: 'video_play' | 'video_pause' | 'video_seek', currentTime: number) => {
+    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+      console.warn('⚠️ WebSocketが接続されていません');
+      return;
+    }
+
+    const videoEvent = {
+      type,
+      currentTime,
+      timestamp: Date.now()
+    };
+
+    try {
+      wsRef.current.send(JSON.stringify(videoEvent));
+      console.log('🎬 動画同期イベント送信:', videoEvent);
+    } catch (err) {
+      console.error('❌ 動画同期イベント送信エラー:', err);
+    }
+  }, []);
+
+  /**
    * 初回接続
    */
   useEffect(() => {
@@ -152,7 +192,9 @@ export const useWebSocket = (userId: string, experimentGroup: ExperimentGroup = 
     isConnected,
     error,
     sendReactionData,
+    sendVideoEvent,
     lastResponse,
-    currentEffect
+    currentEffect,
+    videoSyncEvent
   };
 };

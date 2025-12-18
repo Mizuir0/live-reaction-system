@@ -543,7 +543,27 @@ async def websocket_endpoint(websocket: WebSocket):
             # クライアントからメッセージを受信
             text_data = await websocket.receive_text()
             data = json.loads(text_data)
-            
+
+            message_type = data.get('type')
+
+            # ========================
+            # 動画同期イベント（control2群のみ）
+            # ========================
+            if message_type in ['video_play', 'video_pause', 'video_seek']:
+                # ホストからの動画操作をcontrol2群全体にブロードキャスト
+                if experiment_group == 'control2':
+                    print(f"🎬 動画同期イベント受信 ({user_id}): {message_type}")
+                    # control2群の他のメンバーにブロードキャスト
+                    await manager.broadcast_to_group({
+                        "type": message_type,
+                        "currentTime": data.get('currentTime', 0),
+                        "timestamp": data.get('timestamp', int(time.time() * 1000))
+                    }, 'control2')
+                continue
+
+            # ========================
+            # リアクションデータの処理
+            # ========================
             # 受信データをログ出力（簡略版）
             print(f"📥 データ受信 ({user_id}): states={data.get('states', {})}, events={data.get('events', {})}")
 
@@ -555,7 +575,7 @@ async def websocket_endpoint(websocket: WebSocket):
 
             # データを集約エンジンに登録
             manager.update_reaction_data(user_id, data)
-            
+
             # 受信確認（デバッグ用、本番では削除可）
             await manager.send_personal_message({
                 "type": "data_received",

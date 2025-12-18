@@ -23,13 +23,14 @@ interface ViewingScreenProps {
  */
 const ViewingScreen: React.FC<ViewingScreenProps> = ({ videoId, userId }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const playerRef = useRef<any>(null); // YouTubeプレーヤーのref
   const [playerReady, setPlayerReady] = useState(false);
   const [showDebug, setShowDebug] = useState(false); // デフォルトは非表示
   const [showLandmarks, setShowLandmarks] = useState(false); // ランドマーク表示
   const detectionIntervalRef = useRef<number | null>(null);
   const sendIntervalRef = useRef<number | null>(null);
 
-  // URLからグループを取得
+  // URLからグループとホスト判定を取得
   const getExperimentGroup = (): ExperimentGroup => {
     const urlParams = new URLSearchParams(window.location.search);
     const group = urlParams.get('group');
@@ -38,8 +39,18 @@ const ViewingScreen: React.FC<ViewingScreenProps> = ({ videoId, userId }) => {
     }
     return 'control2'; // デフォルトはエフェクトなし
   };
+
+  const getIsHost = (): boolean => {
+    const urlParams = new URLSearchParams(window.location.search);
+    return urlParams.get('host') === 'true';
+  };
+
   const experimentGroup = getExperimentGroup();
+  const isHost = getIsHost();
   const isDebugMode = experimentGroup === 'debug';
+
+  // control2群かつ参加者モードの場合、動画コントロールを非表示
+  const shouldHideControls = experimentGroup === 'control2' && !isHost;
   
   // 最新のstatesとeventsを保持するref
   const statesRef = useRef<ReactionStates>({
@@ -68,7 +79,7 @@ const ViewingScreen: React.FC<ViewingScreenProps> = ({ videoId, userId }) => {
     startAudio,
     stopAudio
   } = useAudioDetection();
-  const { isConnected: wsConnected, error: wsError, sendReactionData, currentEffect } = useWebSocket(userId, experimentGroup);
+  const { isConnected: wsConnected, error: wsError, sendReactionData, sendVideoEvent, currentEffect, videoSyncEvent } = useWebSocket(userId, experimentGroup);
 
   // エフェクトレンダラー
   useEffectRenderer({ canvasRef, currentEffect });
@@ -205,8 +216,9 @@ const ViewingScreen: React.FC<ViewingScreenProps> = ({ videoId, userId }) => {
   /**
    * YouTube プレイヤーの準備完了時の処理
    */
-  const onPlayerReady: YouTubeProps['onReady'] = (_event) => {
+  const onPlayerReady: YouTubeProps['onReady'] = (event) => {
     console.log('YouTube Player Ready');
+    playerRef.current = event.target;
     setPlayerReady(true);
   };
 
@@ -216,7 +228,70 @@ const ViewingScreen: React.FC<ViewingScreenProps> = ({ videoId, userId }) => {
   const onPlayerStateChange: YouTubeProps['onStateChange'] = (event) => {
     console.log('Player State Changed:', event.data);
     // -1: 未開始, 0: 終了, 1: 再生中, 2: 一時停止, 3: バッファリング中, 5: 頭出し済み
+
+    // control2群のホストの場合、再生/一時停止をWebSocketで同期
+    if (experimentGroup === 'control2' && isHost && playerRef.current) {
+      const currentTime = playerRef.current.getCurrentTime();
+
+      if (event.data === 1) {
+        // 再生開始
+        sendVideoEvent('video_play', currentTime);
+      } else if (event.data === 2) {
+        // 一時停止
+        sendVideoEvent('video_pause', currentTime);
+      }
+    }
   };
+
+  /**
+   * 動画シーク時の処理（control2群のホストのみ）
+   */
+  const lastSeekTimeRef = useRef<number>(0);
+  useEffect(() => {
+    if (experimentGroup !== 'control2' || !isHost || !playerRef.current) {
+      return;
+    }
+
+    const checkSeek = setInterval(() => {
+      if (playerRef.current) {
+        const currentTime = playerRef.current.getCurrentTime();
+        const diff = Math.abs(currentTime - lastSeekTimeRef.current);
+
+        // 1秒以上のジャンプがあった場合はシークと判定
+        if (diff > 1) {
+          sendVideoEvent('video_seek', currentTime);
+          lastSeekTimeRef.current = currentTime;
+        } else {
+          lastSeekTimeRef.current = currentTime;
+        }
+      }
+    }, 500); // 0.5秒ごとにチェック
+
+    return () => clearInterval(checkSeek);
+  }, [experimentGroup, isHost, sendVideoEvent]);
+
+  /**
+   * 動画同期イベントを受信した時の処理（control2群の参加者のみ）
+   */
+  useEffect(() => {
+    if (experimentGroup !== 'control2' || isHost || !videoSyncEvent || !playerRef.current) {
+      return;
+    }
+
+    console.log('🎬 動画同期イベント適用:', videoSyncEvent.type, 'time:', videoSyncEvent.currentTime);
+
+    const player = playerRef.current;
+
+    if (videoSyncEvent.type === 'video_play') {
+      player.playVideo();
+      player.seekTo(videoSyncEvent.currentTime, true);
+    } else if (videoSyncEvent.type === 'video_pause') {
+      player.pauseVideo();
+      player.seekTo(videoSyncEvent.currentTime, true);
+    } else if (videoSyncEvent.type === 'video_seek') {
+      player.seekTo(videoSyncEvent.currentTime, true);
+    }
+  }, [videoSyncEvent, experimentGroup, isHost]);
 
   /**
    * YouTube プレイヤーのオプション
@@ -226,9 +301,10 @@ const ViewingScreen: React.FC<ViewingScreenProps> = ({ videoId, userId }) => {
     width: '100%',
     playerVars: {
       autoplay: 0,
-      controls: 1,
+      controls: shouldHideControls ? 0 : 1, // control2の参加者は非表示
       modestbranding: 1,
-      rel: 0
+      rel: 0,
+      disablekb: shouldHideControls ? 1 : 0 // control2の参加者はキーボード操作も無効化
     },
   };
 
@@ -309,6 +385,22 @@ const ViewingScreen: React.FC<ViewingScreenProps> = ({ videoId, userId }) => {
             onStateChange={onPlayerStateChange}
             style={styles.player}
           />
+          {/* control2群の参加者モード表示 */}
+          {experimentGroup === 'control2' && !isHost && isSystemReady && (
+            <div style={styles.participantBadge}>
+              <span style={styles.participantText}>
+                ⏺️ 同期モード | ホストが動画を操作中
+              </span>
+            </div>
+          )}
+          {/* control2群のホストモード表示 */}
+          {experimentGroup === 'control2' && isHost && isSystemReady && (
+            <div style={styles.hostBadge}>
+              <span style={styles.hostText}>
+                🎛️ ホストモード | 全員の動画を操作中
+              </span>
+            </div>
+          )}
         </div>
 
         {/* デバッグオーバーレイ（debugモードのみ） */}
@@ -633,6 +725,36 @@ const styles: { [key: string]: React.CSSProperties } = {
     borderRadius: '8px',
     fontSize: '14px',
     color: '#ff6b6b'
+  },
+  participantBadge: {
+    position: 'absolute',
+    top: '15px',
+    right: '15px',
+    backgroundColor: 'rgba(33, 150, 243, 0.9)',
+    padding: '10px 20px',
+    borderRadius: '8px',
+    zIndex: 100,
+    boxShadow: '0 2px 8px rgba(0, 0, 0, 0.3)'
+  },
+  participantText: {
+    color: 'white',
+    fontSize: '14px',
+    fontWeight: 'bold'
+  },
+  hostBadge: {
+    position: 'absolute',
+    top: '15px',
+    right: '15px',
+    backgroundColor: 'rgba(76, 175, 80, 0.9)',
+    padding: '10px 20px',
+    borderRadius: '8px',
+    zIndex: 100,
+    boxShadow: '0 2px 8px rgba(0, 0, 0, 0.3)'
+  },
+  hostText: {
+    color: 'white',
+    fontSize: '14px',
+    fontWeight: 'bold'
   }
 };
 

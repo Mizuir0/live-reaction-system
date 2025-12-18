@@ -108,7 +108,7 @@ export const useEffectRenderer = ({ canvasRef, currentEffect }: UseEffectRendere
   };
 
   /**
-   * Wave エフェクト: 画面上下に波打つリボン風の帯
+   * Sound Waves エフェクト (歓声): 📢から音の波が広がる
    */
   const renderWave = (
     ctx: CanvasRenderingContext2D,
@@ -117,65 +117,137 @@ export const useEffectRenderer = ({ canvasRef, currentEffect }: UseEffectRendere
     intensity: number,
     _elapsed: number
   ) => {
-    const waveHeight = 30 + intensity * 50; // 波の高さ
-    const waveFrequency = 0.01; // 波の周波数
-    const waveSpeed = 0.05 * (1 + intensity); // 波の速度
+    const time = performance.now() / 1000;
 
     // 位相を更新
-    wavePhaseRef.current += waveSpeed;
+    wavePhaseRef.current += 0.05 * (1 + intensity);
 
-    // 上部の波
     ctx.save();
-    ctx.globalAlpha = 0.6;
-    ctx.fillStyle = `rgba(100, 149, 237, ${0.5 + intensity * 0.3})`; // コーンフラワーブルー
-    ctx.beginPath();
-    ctx.moveTo(0, 0);
 
-    for (let x = 0; x <= width; x += 5) {
-      const y = Math.sin(x * waveFrequency + wavePhaseRef.current) * waveHeight;
-      ctx.lineTo(x, y);
+    // 📢絵文字を画面下部に配置（複数）
+    const megaphoneCount = Math.floor(2 + intensity * 4); // 2~6個
+    const megaphonePositions = [];
+
+    for (let i = 0; i < megaphoneCount; i++) {
+      const seed = i * 345.678;
+      const x = (Math.sin(seed) * 0.5 + 0.5) * width;
+      const y = height - 60 - Math.sin(time * 2 + i) * 15;
+      const size = 35 + intensity * 25;
+
+      megaphonePositions.push({ x, y });
+
+      // 📢絵文字を描画
+      ctx.globalAlpha = 0.85 + intensity * 0.15;
+      ctx.font = `${size}px Arial`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.shadowBlur = 10;
+      ctx.shadowColor = 'rgba(100, 200, 255, 0.6)';
+      ctx.fillText('📢', x, y);
     }
 
-    ctx.lineTo(width, 0);
-    ctx.closePath();
-    ctx.fill();
+    ctx.shadowBlur = 0;
     ctx.restore();
 
-    // 下部の波
+    // 各メガホンから音の波が広がる
     ctx.save();
-    ctx.globalAlpha = 0.6;
-    ctx.fillStyle = `rgba(100, 149, 237, ${0.5 + intensity * 0.3})`;
-    ctx.beginPath();
-    ctx.moveTo(0, height);
 
-    for (let x = 0; x <= width; x += 5) {
-      const y = height - Math.sin(x * waveFrequency + wavePhaseRef.current + Math.PI) * waveHeight;
-      ctx.lineTo(x, y);
-    }
+    for (const pos of megaphonePositions) {
+      const waveCount = 5;
 
-    ctx.lineTo(width, height);
-    ctx.closePath();
-    ctx.fill();
-    ctx.restore();
+      for (let i = 0; i < waveCount; i++) {
+        const wavePhase = (wavePhaseRef.current + i * 0.5) % 3;
+        const radius = wavePhase * 150 + 30;
+        const alpha = (1 - wavePhase / 3) * (0.5 + intensity * 0.3);
 
-    // 光の粒子を追加（intensity が高いとき）
-    if (intensity > 0.5) {
-      const particleCount = Math.floor((intensity - 0.5) * 20);
-      ctx.save();
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
-      ctx.shadowBlur = 5;
-      ctx.shadowColor = 'rgba(100, 149, 237, 0.8)';
-
-      for (let i = 0; i < particleCount; i++) {
-        const x = Math.random() * width;
-        const y = Math.random() > 0.5
-          ? Math.sin(x * waveFrequency + wavePhaseRef.current) * waveHeight + 20
-          : height - Math.sin(x * waveFrequency + wavePhaseRef.current + Math.PI) * waveHeight - 20;
+        // 音の波の円弧（右向き）
+        ctx.globalAlpha = alpha;
+        ctx.strokeStyle = `rgba(100, 200, 255, ${0.7 + intensity * 0.3})`;
+        ctx.lineWidth = 4 + intensity * 4;
+        ctx.shadowBlur = 15;
+        ctx.shadowColor = 'rgba(100, 200, 255, 0.7)';
 
         ctx.beginPath();
-        ctx.arc(x, y, 2, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.arc(pos.x, pos.y, radius, -Math.PI / 3, Math.PI / 3);
+        ctx.stroke();
+
+        // 二重線効果（外側の光）
+        ctx.strokeStyle = `rgba(150, 220, 255, ${0.4 + intensity * 0.2})`;
+        ctx.lineWidth = 8 + intensity * 6;
+        ctx.shadowBlur = 25;
+        ctx.beginPath();
+        ctx.arc(pos.x, pos.y, radius, -Math.PI / 3, Math.PI / 3);
+        ctx.stroke();
       }
+    }
+
+    ctx.restore();
+
+    // 音符パーティクルが波と共に飛び散る
+    if (intensity > 0.4) {
+      ctx.save();
+      const noteCount = Math.floor(10 + intensity * 20); // 10~30個の音符
+
+      for (let i = 0; i < noteCount; i++) {
+        const seed = i * 123.456;
+        const basePos = megaphonePositions[i % megaphonePositions.length];
+        const angle = -Math.PI / 3 + (Math.random() * Math.PI * 2) / 3;
+        const distance = (time * 100 + i * 50) % 300;
+        const x = basePos.x + Math.cos(angle) * distance;
+        const y = basePos.y + Math.sin(angle) * distance;
+        const size = 18 + intensity * 12;
+
+        // 遠くに行くほど薄くなる
+        const fadeAlpha = Math.max(0, 1 - distance / 300);
+        ctx.globalAlpha = fadeAlpha * (0.6 + intensity * 0.3);
+
+        // 音符絵文字
+        const note = i % 3 === 0 ? '♪' : (i % 3 === 1 ? '♬' : '🎵');
+        ctx.font = `${size}px Arial`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.shadowBlur = 8;
+        ctx.shadowColor = 'rgba(100, 200, 255, 0.6)';
+        ctx.fillText(note, x, y);
+      }
+
+      ctx.restore();
+    }
+
+    // 画面全体に音の波紋を追加（intensityが高い時）
+    if (intensity > 0.6) {
+      ctx.save();
+      const rippleCount = 3;
+
+      for (let i = 0; i < rippleCount; i++) {
+        const ripplePhase = (time * 1.5 + i * 0.8) % 2;
+        const rippleRadius = ripplePhase * Math.max(width, height) * 0.5;
+        const rippleAlpha = (1 - ripplePhase / 2) * (intensity - 0.6) * 0.3;
+
+        ctx.globalAlpha = rippleAlpha;
+        ctx.strokeStyle = 'rgba(120, 210, 255, 0.5)';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(width / 2, height / 2, rippleRadius, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+
+      ctx.restore();
+    }
+
+    // 画面下部に音のグロー
+    if (intensity > 0.5) {
+      ctx.save();
+      ctx.globalAlpha = (intensity - 0.5) * 0.4;
+
+      const bottomGradient = ctx.createLinearGradient(0, height - 120, 0, height);
+      bottomGradient.addColorStop(0, 'rgba(100, 200, 255, 0)');
+      bottomGradient.addColorStop(0.5, 'rgba(100, 200, 255, 0.3)');
+      bottomGradient.addColorStop(1, 'rgba(100, 200, 255, 0.5)');
+
+      ctx.fillStyle = bottomGradient;
+      ctx.fillRect(0, height - 120, width, 120);
+
       ctx.restore();
     }
   };
@@ -280,7 +352,7 @@ export const useEffectRenderer = ({ canvasRef, currentEffect }: UseEffectRendere
   };
 
   /**
-   * Bounce エフェクト: 縦揺れ時の跳ねるボール
+   * Music Bounce エフェクト (頷き): 🎵🎶が上下に弾む
    */
   const renderBounce = (
     ctx: CanvasRenderingContext2D,
@@ -289,45 +361,103 @@ export const useEffectRenderer = ({ canvasRef, currentEffect }: UseEffectRendere
     intensity: number,
     _elapsed: number
   ) => {
-    const ballCount = Math.floor(5 + intensity * 10); // 5~15個のボール
+    const noteCount = Math.floor(6 + intensity * 12); // 6~18個の音符
     const time = performance.now() * 0.002;
 
     ctx.save();
 
-    for (let i = 0; i < ballCount; i++) {
-      const x = (width / (ballCount + 1)) * (i + 1);
-      const bounceHeight = 50 + intensity * 100;
-      const y = height - 50 - Math.abs(Math.sin(time + i * 0.5)) * bounceHeight;
-      const size = 10 + intensity * 15;
+    for (let i = 0; i < noteCount; i++) {
+      const x = (width / (noteCount + 1)) * (i + 1);
+      const bounceHeight = 60 + intensity * 120;
+      const bounceSpeed = time * 1.5 + i * 0.5;
+      const y = height - 80 - Math.abs(Math.sin(bounceSpeed)) * bounceHeight;
+      const size = 35 + intensity * 25;
 
-      // ボールのグラデーション
-      const gradient = ctx.createRadialGradient(x, y, 0, x, y, size);
-      gradient.addColorStop(0, 'rgba(255, 100, 180, 1)'); // ピンク
-      gradient.addColorStop(1, 'rgba(255, 100, 180, 0.3)');
+      // 🎵と🎶を交互に表示
+      const emoji = i % 2 === 0 ? '🎵' : '🎶';
 
-      ctx.fillStyle = gradient;
-      ctx.shadowBlur = 15;
-      ctx.shadowColor = 'rgba(255, 100, 180, 0.8)';
-      ctx.beginPath();
-      ctx.arc(x, y, size, 0, Math.PI * 2);
-      ctx.fill();
+      // 音符の絵文字を描画
+      ctx.globalAlpha = 0.85 + intensity * 0.15;
+      ctx.font = `${size}px Arial`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+
+      // グロー効果
+      ctx.shadowBlur = 15 + intensity * 10;
+      ctx.shadowColor = 'rgba(100, 200, 255, 0.8)';
+      ctx.fillText(emoji, x, y);
+
+      // 跳ねている時に少し回転させる
+      const rotation = Math.sin(bounceSpeed * 2) * 0.2;
+      if (Math.abs(rotation) > 0.05) {
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.rotate(rotation);
+        ctx.globalAlpha = 0.5;
+        ctx.fillText(emoji, 0, 0);
+        ctx.restore();
+      }
 
       // 影を描画
-      ctx.globalAlpha = 0.3;
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+      ctx.shadowBlur = 0;
+      ctx.globalAlpha = 0.25;
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
       ctx.beginPath();
-      const shadowY = height - 30;
-      const shadowSize = size * 0.6 * (1 - (y - shadowY) / bounceHeight);
-      ctx.ellipse(x, shadowY, shadowSize, shadowSize * 0.3, 0, 0, Math.PI * 2);
+      const shadowY = height - 50;
+      const shadowScale = 1 - ((y - shadowY) / bounceHeight) * 0.7;
+      const shadowWidth = size * 0.8 * Math.max(0.2, shadowScale);
+      const shadowHeight = size * 0.2 * Math.max(0.2, shadowScale);
+      ctx.ellipse(x, shadowY, shadowWidth, shadowHeight, 0, 0, Math.PI * 2);
       ctx.fill();
       ctx.globalAlpha = 1;
     }
 
     ctx.restore();
+
+    // リズムを強調するために、画面下部に波打つライン
+    if (intensity > 0.4) {
+      ctx.save();
+      ctx.globalAlpha = 0.3 + intensity * 0.3;
+      ctx.strokeStyle = 'rgba(100, 200, 255, 0.7)';
+      ctx.lineWidth = 3 + intensity * 3;
+      ctx.shadowBlur = 10;
+      ctx.shadowColor = 'rgba(100, 200, 255, 0.6)';
+
+      ctx.beginPath();
+      for (let x = 0; x <= width; x += 10) {
+        const y = height - 40 + Math.sin(x * 0.02 + time * 3) * (10 + intensity * 15);
+        if (x === 0) {
+          ctx.moveTo(x, y);
+        } else {
+          ctx.lineTo(x, y);
+        }
+      }
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // intensityが高い時は背景に音の波紋効果
+    if (intensity > 0.6) {
+      ctx.save();
+      const rippleCount = 3;
+      for (let i = 0; i < rippleCount; i++) {
+        const ripplePhase = (time * 2 + i * 0.7) % 2;
+        const rippleRadius = ripplePhase * Math.max(width, height) * 0.4;
+        const rippleAlpha = (1 - ripplePhase / 2) * (intensity - 0.6) * 0.4;
+
+        ctx.globalAlpha = rippleAlpha;
+        ctx.strokeStyle = 'rgba(150, 220, 255, 0.5)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(width / 2, height / 2, rippleRadius, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
   };
 
   /**
-   * Cheer エフェクト: 手を上げた時の応援エフェクト
+   * Celebration エフェクト (手を上げる): 🙌絵文字 + カラフルな紙吹雪
    */
   const renderCheer = (
     ctx: CanvasRenderingContext2D,
@@ -336,68 +466,113 @@ export const useEffectRenderer = ({ canvasRef, currentEffect }: UseEffectRendere
     intensity: number,
     _elapsed: number
   ) => {
-    const time = performance.now() * 0.003;
-    const handCount = Math.floor(3 + intensity * 7); // 3~10個の手
+    const time = performance.now() / 1000;
 
     ctx.save();
 
-    for (let i = 0; i < handCount; i++) {
-      const x = (width / (handCount + 1)) * (i + 1);
-      const offset = Math.sin(time + i * 0.5) * 30;
-      const y = height * 0.7 + offset;
-      const size = 20 + intensity * 20;
+    // 🙌絵文字を画面下部に配置（5~15個）
+    const emojiCount = Math.floor(5 + intensity * 10);
+    for (let i = 0; i < emojiCount; i++) {
+      const seed = i * 234.567;
+      const x = (Math.sin(seed) * 0.5 + 0.5) * width;
+      const y = height * 0.7 + Math.sin(time * 2 + i * 0.5) * 20;
+      const size = 40 + intensity * 30;
 
-      // 手のアイコン（簡易版：黄色い円）
-      ctx.fillStyle = 'rgba(255, 223, 0, 0.9)';
+      // 🙌絵文字を描画
+      ctx.globalAlpha = 0.8 + intensity * 0.2;
+      ctx.font = `${size}px Arial`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
       ctx.shadowBlur = 10;
-      ctx.shadowColor = 'rgba(255, 223, 0, 0.6)';
-      ctx.beginPath();
-      ctx.arc(x, y, size, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.shadowColor = 'rgba(255, 215, 0, 0.6)';
+      ctx.fillText('🙌', x, y);
+    }
 
-      // 手の形を少し表現（指）
-      ctx.fillStyle = 'rgba(255, 200, 0, 0.9)';
-      for (let j = 0; j < 5; j++) {
-        const angle = (Math.PI * 2 * j) / 5 - Math.PI / 2;
-        const fingerX = x + Math.cos(angle) * size * 0.7;
-        const fingerY = y + Math.sin(angle) * size * 0.7;
-        ctx.beginPath();
-        ctx.arc(fingerX, fingerY, size * 0.3, 0, Math.PI * 2);
-        ctx.fill();
-      }
+    ctx.shadowBlur = 0;
+    ctx.restore();
 
-      // キラキラ効果
-      if (intensity > 0.5) {
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
-        for (let k = 0; k < 3; k++) {
-          const sparkleX = x + (Math.random() - 0.5) * size * 2;
-          const sparkleY = y + (Math.random() - 0.5) * size * 2;
-          ctx.beginPath();
-          ctx.arc(sparkleX, sparkleY, 2, 0, Math.PI * 2);
-          ctx.fill();
-        }
-      }
+    // カラフルな紙吹雪（上から降ってくる）
+    ctx.save();
+    const confettiCount = Math.floor(20 + intensity * 40); // 20~60個の紙吹雪
+    const confettiColors = [
+      'rgba(255, 0, 100, 0.9)',   // ピンク
+      'rgba(255, 215, 0, 0.9)',   // ゴールド
+      'rgba(0, 200, 255, 0.9)',   // シアン
+      'rgba(150, 0, 255, 0.9)',   // パープル
+      'rgba(0, 255, 150, 0.9)',   // グリーン
+      'rgba(255, 100, 0, 0.9)',   // オレンジ
+    ];
+
+    for (let i = 0; i < confettiCount; i++) {
+      const seed = i * 123.456;
+      const x = ((time * 80 + seed * width) % (width + 100)) - 50;
+      const fallSpeed = 200 + (i % 5) * 50;
+      const y = ((time * fallSpeed + i * 200) % (height + 200)) - 100;
+
+      // 紙吹雪の形状（四角または細長い長方形）
+      const isRect = i % 2 === 0;
+      const rotation = (time * 2 + i) % (Math.PI * 2);
+      const sizeW = isRect ? 8 + intensity * 4 : 3 + intensity * 2;
+      const sizeH = isRect ? 8 + intensity * 4 : 12 + intensity * 8;
+
+      const color = confettiColors[i % confettiColors.length];
+
+      // 透明度（下に行くほど薄くなる）
+      const fadeStart = height * 0.6;
+      const alpha = y < fadeStart ? 1.0 : Math.max(0, 1 - (y - fadeStart) / (height - fadeStart));
+
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = color;
+
+      // 紙吹雪を回転させて描画
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(rotation);
+      ctx.fillRect(-sizeW / 2, -sizeH / 2, sizeW, sizeH);
+      ctx.restore();
     }
 
     ctx.restore();
 
-    // 応援メッセージ（intensityが高い時）
-    if (intensity > 0.7) {
+    // intensity が高い時は追加の🎊絵文字を表示
+    if (intensity > 0.6) {
       ctx.save();
-      ctx.font = `bold ${30 + intensity * 20}px Arial`;
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
-      ctx.shadowBlur = 10;
-      ctx.shadowColor = 'rgba(255, 223, 0, 0.8)';
-      ctx.textAlign = 'center';
-      const messages = ['🎉', '✨', '👏', '🙌'];
-      const message = messages[Math.floor(time) % messages.length];
-      ctx.fillText(message, width / 2, height * 0.3 + Math.sin(time * 2) * 10);
+      const partyCount = Math.floor(3 + (intensity - 0.6) * 10);
+
+      for (let i = 0; i < partyCount; i++) {
+        const seed = i * 456.789;
+        const x = (Math.sin(seed) * 0.5 + 0.5) * width;
+        const y = height * 0.2 + Math.sin(time * 3 + i) * 30;
+        const size = 30 + intensity * 20;
+
+        ctx.globalAlpha = 0.6 + Math.sin(time * 2 + i) * 0.3;
+        ctx.font = `${size}px Arial`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('🎊', x, y);
+      }
+
+      ctx.restore();
+    }
+
+    // 画面全体に明るいグロー効果
+    if (intensity > 0.5) {
+      ctx.save();
+      ctx.globalAlpha = (intensity - 0.5) * 0.2;
+      const gradient = ctx.createRadialGradient(
+        width / 2, height / 2, 0,
+        width / 2, height / 2, Math.max(width, height) * 0.6
+      );
+      gradient.addColorStop(0, 'rgba(255, 240, 200, 0.3)');
+      gradient.addColorStop(1, 'rgba(255, 240, 200, 0)');
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, width, height);
       ctx.restore();
     }
   };
 
   /**
-   * Shimmer エフェクト: 横揺れ時の左右に流れる光の粒子
+   * Music Swing エフェクト (首を横に振る): 🎶🎵が左右にスイング
    */
   const renderShimmer = (
     ctx: CanvasRenderingContext2D,
@@ -407,89 +582,118 @@ export const useEffectRenderer = ({ canvasRef, currentEffect }: UseEffectRendere
     _elapsed: number
   ) => {
     const time = performance.now() * 0.002;
-    const particleCount = Math.floor(10 + intensity * 30); // 10~40個の粒子
+    const noteCount = Math.floor(5 + intensity * 10); // 5~15個の音符
 
-    // 左右に流れる光の帯を描画
     ctx.save();
-    ctx.globalAlpha = 0.4 + intensity * 0.3;
 
-    for (let i = 0; i < 5; i++) {
-      const y = (height / 6) * (i + 1);
-      const offset = Math.sin(time + i * 0.5) * 100;
-      const xStart = -100 + offset + (time * 100) % (width + 200);
+    // 音符を左右に揺らしながら配置
+    for (let i = 0; i < noteCount; i++) {
+      const centerY = height * (0.2 + (i / noteCount) * 0.6);
+      const swingAmount = 80 + intensity * 120;
+      const swingSpeed = time * 1.8 + i * 0.6;
+      const x = width / 2 + Math.sin(swingSpeed) * swingAmount;
+      const y = centerY;
+      const size = 40 + intensity * 30;
 
-      // グラデーションを使用した光の帯
-      const gradient = ctx.createLinearGradient(xStart, y, xStart + 150, y);
-      gradient.addColorStop(0, 'rgba(147, 112, 219, 0)'); // 紫
-      gradient.addColorStop(0.5, `rgba(147, 112, 219, ${0.6 + intensity * 0.4})`);
-      gradient.addColorStop(1, 'rgba(147, 112, 219, 0)');
+      // 🎶と🎵を交互に表示
+      const emoji = i % 2 === 0 ? '🎶' : '🎵';
 
-      ctx.fillStyle = gradient;
-      ctx.fillRect(xStart, y - 5, 150, 10);
-    }
+      // スイングの動きに合わせて回転
+      const rotation = Math.sin(swingSpeed) * 0.3;
 
-    ctx.restore();
-
-    // キラキラした粒子を追加
-    ctx.save();
-    ctx.fillStyle = 'rgba(255, 215, 255, 0.8)'; // ピンクがかった白
-    ctx.shadowBlur = 8;
-    ctx.shadowColor = 'rgba(147, 112, 219, 0.8)';
-
-    for (let i = 0; i < particleCount; i++) {
-      const seed = i * 1.234;
-      const x = ((time * 150 + seed * width) % (width + 100)) - 50;
-      const y = ((Math.sin(time + seed) * 0.5 + 0.5) * height * 0.8) + height * 0.1;
-      const size = 2 + Math.sin(time * 2 + seed) * 2;
-
-      ctx.globalAlpha = 0.3 + Math.sin(time * 3 + seed) * 0.3;
-      ctx.beginPath();
-      ctx.arc(x, y, size, 0, Math.PI * 2);
-      ctx.fill();
-
-      // スター型の光を追加
-      if (intensity > 0.5 && i % 3 === 0) {
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.moveTo(x - size * 2, y);
-        ctx.lineTo(x + size * 2, y);
-        ctx.moveTo(x, y - size * 2);
-        ctx.lineTo(x, y + size * 2);
-        ctx.stroke();
-      }
-    }
-
-    ctx.restore();
-
-    // intensity が高い時はオーロラ風の背景効果を追加
-    if (intensity > 0.6) {
       ctx.save();
-      ctx.globalAlpha = (intensity - 0.6) * 0.5;
+      ctx.translate(x, y);
+      ctx.rotate(rotation);
+
+      // グロー効果
+      ctx.shadowBlur = 15 + intensity * 10;
+      ctx.shadowColor = 'rgba(255, 100, 200, 0.8)';
+
+      // 音符の絵文字を描画
+      ctx.globalAlpha = 0.8 + intensity * 0.2;
+      ctx.font = `${size}px Arial`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(emoji, 0, 0);
+
+      // 残像効果（動きを強調）
+      if (intensity > 0.5) {
+        const trailOffset = Math.cos(swingSpeed) * 30;
+        ctx.globalAlpha = 0.3;
+        ctx.shadowBlur = 5;
+        ctx.fillText(emoji, -trailOffset, 0);
+      }
+
+      ctx.restore();
+    }
+
+    ctx.restore();
+
+    // 左右にスイングする軌跡ライン
+    if (intensity > 0.4) {
+      ctx.save();
+      ctx.globalAlpha = 0.25 + intensity * 0.25;
+      ctx.strokeStyle = 'rgba(255, 150, 220, 0.6)';
+      ctx.lineWidth = 2 + intensity * 2;
+      ctx.setLineDash([5, 5]);
 
       for (let i = 0; i < 3; i++) {
-        const y = height * (0.3 + i * 0.2);
-        const waveOffset = Math.sin(time * 0.5 + i) * 50;
-
-        const gradient = ctx.createLinearGradient(0, y - 50, 0, y + 50);
-        gradient.addColorStop(0, 'rgba(138, 43, 226, 0)'); // 青紫
-        gradient.addColorStop(0.5, 'rgba(138, 43, 226, 0.3)');
-        gradient.addColorStop(1, 'rgba(138, 43, 226, 0)');
-
-        ctx.fillStyle = gradient;
+        const y = height * (0.25 + i * 0.25);
         ctx.beginPath();
-        for (let x = 0; x <= width; x += 10) {
-          const yOffset = Math.sin((x / width) * Math.PI * 2 + time + i) * 30;
-          if (x === 0) {
-            ctx.moveTo(x, y + yOffset + waveOffset);
+
+        for (let angle = -Math.PI; angle <= Math.PI; angle += 0.1) {
+          const swingX = width / 2 + Math.sin(angle) * (100 + intensity * 100);
+          if (angle === -Math.PI) {
+            ctx.moveTo(swingX, y);
           } else {
-            ctx.lineTo(x, y + yOffset + waveOffset);
+            ctx.lineTo(swingX, y);
           }
         }
-        ctx.lineTo(width, y + 50);
-        ctx.lineTo(0, y + 50);
-        ctx.closePath();
-        ctx.fill();
+        ctx.stroke();
+      }
+
+      ctx.setLineDash([]);
+      ctx.restore();
+    }
+
+    // 左右の端にリズミカルな光の脈動
+    ctx.save();
+    const pulsateLeft = Math.sin(time * 2.5) * 0.5 + 0.5;
+    const pulsateRight = Math.sin(time * 2.5 + Math.PI) * 0.5 + 0.5;
+
+    // 左端のグロー
+    const leftGradient = ctx.createRadialGradient(0, height / 2, 0, 0, height / 2, 150);
+    leftGradient.addColorStop(0, `rgba(255, 100, 200, ${0.3 * pulsateLeft * intensity})`);
+    leftGradient.addColorStop(1, 'rgba(255, 100, 200, 0)');
+    ctx.fillStyle = leftGradient;
+    ctx.fillRect(0, 0, 150, height);
+
+    // 右端のグロー
+    const rightGradient = ctx.createRadialGradient(width, height / 2, 0, width, height / 2, 150);
+    rightGradient.addColorStop(0, `rgba(255, 100, 200, ${0.3 * pulsateRight * intensity})`);
+    rightGradient.addColorStop(1, 'rgba(255, 100, 200, 0)');
+    ctx.fillStyle = rightGradient;
+    ctx.fillRect(width - 150, 0, 150, height);
+
+    ctx.restore();
+
+    // intensityが高い時は音の波が左右に広がる
+    if (intensity > 0.6) {
+      ctx.save();
+      const waveCount = 2;
+
+      for (let i = 0; i < waveCount; i++) {
+        const wavePhase = (time * 3 + i * 1.5) % 3;
+        const waveX = width / 2 + Math.sin(wavePhase) * width * 0.4;
+        const waveRadius = wavePhase * 100;
+        const waveAlpha = (1 - wavePhase / 3) * (intensity - 0.6) * 0.5;
+
+        ctx.globalAlpha = waveAlpha;
+        ctx.strokeStyle = 'rgba(255, 150, 220, 0.6)';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(waveX, height / 2, waveRadius, 0, Math.PI * 2);
+        ctx.stroke();
       }
 
       ctx.restore();
@@ -692,7 +896,7 @@ export const useEffectRenderer = ({ canvasRef, currentEffect }: UseEffectRendere
   };
 
   /**
-   * Groove効果（横揺れ）
+   * Groove効果（横揺れ）- 視認性向上版
    * 左右に流れる波とリズミカルなパーティクル
    */
   const renderGroove = (ctx: CanvasRenderingContext2D, width: number, height: number, intensity: number, _elapsed: number) => {
@@ -700,19 +904,37 @@ export const useEffectRenderer = ({ canvasRef, currentEffect }: UseEffectRendere
 
     const time = performance.now() / 1000;
 
-    // 左右に流れる波（3本の正弦波）
-    const waveCount = 3;
+    // 左右に流れる波（4本の正弦波 - 増量）
+    const waveCount = 4;
     for (let i = 0; i < waveCount; i++) {
-      const yPos = height * (0.25 + i * 0.25);
-      const amplitude = 30 + intensity * 40; // 波の高さ
-      const frequency = 0.02; // 波の細かさ
-      const speed = time * 2 + i * 0.5; // 左右に流れる速度
+      const yPos = height * (0.2 + i * 0.2);
+      const amplitude = 40 + intensity * 60; // 波の高さを増加
+      const frequency = 0.02;
+      const speed = time * 2 + i * 0.5;
 
+      // メインの波（より明るく、太く）
       ctx.beginPath();
-      ctx.strokeStyle = `rgba(255, 140, 0, ${0.3 + intensity * 0.4})`; // オレンジ色
-      ctx.lineWidth = 3 + intensity * 3;
-      ctx.shadowBlur = 15;
-      ctx.shadowColor = 'rgba(255, 140, 0, 0.6)';
+      ctx.strokeStyle = `rgba(255, 165, 0, ${0.6 + intensity * 0.4})`; // より明るいオレンジ、不透明度アップ
+      ctx.lineWidth = 5 + intensity * 5; // 太さアップ
+      ctx.shadowBlur = 25; // グローを強化
+      ctx.shadowColor = 'rgba(255, 140, 0, 0.9)';
+
+      for (let x = 0; x < width; x += 5) {
+        const y = yPos + Math.sin((x * frequency) + speed) * amplitude;
+        if (x === 0) {
+          ctx.moveTo(x, y);
+        } else {
+          ctx.lineTo(x, y);
+        }
+      }
+      ctx.stroke();
+
+      // 二重線効果（外側の光）
+      ctx.beginPath();
+      ctx.strokeStyle = `rgba(255, 200, 100, ${0.3 + intensity * 0.3})`;
+      ctx.lineWidth = 10 + intensity * 8;
+      ctx.shadowBlur = 35;
+      ctx.shadowColor = 'rgba(255, 165, 0, 0.7)';
 
       for (let x = 0; x < width; x += 5) {
         const y = yPos + Math.sin((x * frequency) + speed) * amplitude;
@@ -727,53 +949,84 @@ export const useEffectRenderer = ({ canvasRef, currentEffect }: UseEffectRendere
 
     ctx.shadowBlur = 0;
 
-    // 左右に流れるパーティクル（10~30個）
-    const particleCount = Math.floor(10 + intensity * 20);
+    // 左右に流れるパーティクル（増量、大型化）
+    const particleCount = Math.floor(20 + intensity * 35); // 20~55個に増量
     for (let i = 0; i < particleCount; i++) {
       const offset = (i / particleCount) * width;
       const x = (offset + time * 150 + i * 30) % width;
-      const y = height * (0.2 + (i % 3) * 0.3) + Math.sin(time * 3 + i) * 20;
-      const size = 4 + intensity * 6;
-      const alpha = 0.5 + Math.sin(time * 2 + i * 0.5) * 0.3;
+      const y = height * (0.15 + (i % 4) * 0.25) + Math.sin(time * 3 + i) * 25;
+      const size = 6 + intensity * 10; // サイズアップ
+      const alpha = 0.7 + Math.sin(time * 2 + i * 0.5) * 0.3; // 不透明度アップ
 
       ctx.globalAlpha = alpha;
-      ctx.fillStyle = 'rgba(255, 165, 0, 0.8)'; // オレンジゴールド
-      ctx.shadowBlur = 12;
-      ctx.shadowColor = 'rgba(255, 140, 0, 0.8)';
+      ctx.fillStyle = 'rgba(255, 180, 50, 0.95)'; // より明るく鮮やかに
+      ctx.shadowBlur = 18; // グロー強化
+      ctx.shadowColor = 'rgba(255, 140, 0, 1)';
       ctx.beginPath();
       ctx.arc(x, y, size, 0, Math.PI * 2);
       ctx.fill();
+
+      // パーティクルの内側に白いコアを追加（明るさ強調）
+      if (intensity > 0.4) {
+        ctx.fillStyle = 'rgba(255, 255, 200, 0.8)';
+        ctx.shadowBlur = 8;
+        ctx.beginPath();
+        ctx.arc(x, y, size * 0.4, 0, Math.PI * 2);
+        ctx.fill();
+      }
     }
 
     ctx.restore();
 
-    // 画面端に左右の脈動するグロー
+    // 画面端に左右の脈動するグロー（強化）
     ctx.save();
-    const pulse = Math.sin(time * 2.5) * 0.3 + 0.7;
+    const pulse = Math.sin(time * 2.5) * 0.4 + 0.8; // 脈動を強化
 
-    // 左端
-    const leftGradient = ctx.createLinearGradient(0, 0, 100, 0);
-    leftGradient.addColorStop(0, `rgba(255, 140, 0, ${(0.3 + intensity * 0.3) * pulse})`);
-    leftGradient.addColorStop(1, 'rgba(255, 140, 0, 0)');
+    // 左端（範囲拡大、明度アップ）
+    const leftGradient = ctx.createLinearGradient(0, 0, 200, 0);
+    leftGradient.addColorStop(0, `rgba(255, 165, 0, ${(0.5 + intensity * 0.4) * pulse})`);
+    leftGradient.addColorStop(1, 'rgba(255, 165, 0, 0)');
     ctx.fillStyle = leftGradient;
-    ctx.fillRect(0, 0, 100, height);
+    ctx.fillRect(0, 0, 200, height);
 
-    // 右端
-    const rightGradient = ctx.createLinearGradient(width - 100, 0, width, 0);
-    rightGradient.addColorStop(0, 'rgba(255, 140, 0, 0)');
-    rightGradient.addColorStop(1, `rgba(255, 140, 0, ${(0.3 + intensity * 0.3) * pulse})`);
+    // 右端（範囲拡大、明度アップ）
+    const rightGradient = ctx.createLinearGradient(width - 200, 0, width, 0);
+    rightGradient.addColorStop(0, 'rgba(255, 165, 0, 0)');
+    rightGradient.addColorStop(1, `rgba(255, 165, 0, ${(0.5 + intensity * 0.4) * pulse})`);
     ctx.fillStyle = rightGradient;
-    ctx.fillRect(width - 100, 0, 100, height);
+    ctx.fillRect(width - 200, 0, 200, height);
 
     ctx.restore();
 
-    // intensityが高い時は画面全体にリズミカルなフラッシュ
-    if (intensity > 0.7) {
-      const flashAlpha = Math.sin(time * 4) * 0.1 + 0.1;
+    // 画面全体にリズミカルなフラッシュ（閾値を下げて早めに表示）
+    if (intensity > 0.5) {
+      const flashAlpha = Math.sin(time * 4) * 0.15 + 0.15;
       ctx.save();
-      ctx.globalAlpha = flashAlpha * (intensity - 0.7);
-      ctx.fillStyle = 'rgba(255, 200, 100, 0.2)';
+      ctx.globalAlpha = flashAlpha * (intensity - 0.5) * 1.5;
+      ctx.fillStyle = 'rgba(255, 215, 100, 0.25)';
       ctx.fillRect(0, 0, width, height);
+      ctx.restore();
+    }
+
+    // 上下端にもオレンジのグロー帯を追加（視認性向上）
+    if (intensity > 0.6) {
+      ctx.save();
+      ctx.globalAlpha = (intensity - 0.6) * 0.6;
+
+      // 上部
+      const topGradient = ctx.createLinearGradient(0, 0, 0, 80);
+      topGradient.addColorStop(0, 'rgba(255, 180, 50, 0.4)');
+      topGradient.addColorStop(1, 'rgba(255, 180, 50, 0)');
+      ctx.fillStyle = topGradient;
+      ctx.fillRect(0, 0, width, 80);
+
+      // 下部
+      const bottomGradient = ctx.createLinearGradient(0, height - 80, 0, height);
+      bottomGradient.addColorStop(0, 'rgba(255, 180, 50, 0)');
+      bottomGradient.addColorStop(1, 'rgba(255, 180, 50, 0.4)');
+      ctx.fillStyle = bottomGradient;
+      ctx.fillRect(0, height - 80, width, 80);
+
       ctx.restore();
     }
   };

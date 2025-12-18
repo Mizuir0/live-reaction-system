@@ -28,7 +28,7 @@ export const useEffectRenderer = ({ canvasRef, currentEffect }: UseEffectRendere
   const wavePhaseRef = useRef<number>(0);
 
   /**
-   * Sparkle エフェクト: キラキラとした粒子が画面周囲に散る
+   * Yellow Glow エフェクト (笑顔): 黄色い笑顔マーク型のパーティクルが輝く
    */
   const renderSparkle = (
     ctx: CanvasRenderingContext2D,
@@ -37,60 +37,74 @@ export const useEffectRenderer = ({ canvasRef, currentEffect }: UseEffectRendere
     intensity: number,
     _elapsed: number
   ) => {
-    // intensity に応じて粒子数を調整（0.0 ~ 1.0 -> 10 ~ 50個）
-    const targetParticleCount = Math.floor(10 + intensity * 40);
+    const time = performance.now() / 1000;
 
-    // 新しい粒子を生成
-    while (particlesRef.current.length < targetParticleCount) {
-      const isHorizontal = Math.random() > 0.5;
-      let x, y;
+    // intensity に応じて笑顔マークの数を調整（5 ~ 20個）
+    const smileCount = Math.floor(5 + intensity * 15);
 
-      if (isHorizontal) {
-        // 上下の辺
-        x = Math.random() * width;
-        y = Math.random() > 0.5 ? 0 : height;
-      } else {
-        // 左右の辺
-        x = Math.random() > 0.5 ? 0 : width;
-        y = Math.random() * height;
+    ctx.save();
+
+    for (let i = 0; i < smileCount; i++) {
+      // ランダムな位置（シード値で固定）
+      const seed = i * 234.567;
+      const x = (Math.sin(seed) * 0.5 + 0.5) * width;
+      const y = ((Math.sin(seed * 1.234) * 0.5 + 0.5) * height * 0.7) + height * 0.15;
+
+      // サイズと透明度をアニメーション
+      const baseSize = 40 + intensity * 30;
+      const pulse = Math.sin(time * 2 + i * 0.5) * 0.2 + 1.0;
+      const size = baseSize * pulse;
+      const alpha = 0.6 + Math.sin(time * 3 + i) * 0.3;
+
+      ctx.globalAlpha = alpha * (0.7 + intensity * 0.3);
+
+      // 黄色いグロー（背景）
+      ctx.shadowBlur = 25 + intensity * 15;
+      ctx.shadowColor = 'rgba(255, 215, 0, 0.8)';
+      ctx.fillStyle = 'rgba(255, 223, 0, 0.3)';
+      ctx.beginPath();
+      ctx.arc(x, y, size * 0.8, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 笑顔の絵文字を描画
+      ctx.shadowBlur = 10;
+      ctx.shadowColor = 'rgba(255, 215, 0, 0.6)';
+      ctx.font = `${size}px Arial`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('😊', x, y);
+
+      // キラキラ効果
+      if (intensity > 0.5) {
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+        for (let j = 0; j < 4; j++) {
+          const angle = (Math.PI * 2 * j) / 4 + time * 2;
+          const sparkleX = x + Math.cos(angle) * size * 0.7;
+          const sparkleY = y + Math.sin(angle) * size * 0.7;
+          ctx.beginPath();
+          ctx.arc(sparkleX, sparkleY, 3, 0, Math.PI * 2);
+          ctx.fill();
+        }
       }
-
-      const particle: Particle = {
-        x,
-        y,
-        vx: (Math.random() - 0.5) * 2,
-        vy: (Math.random() - 0.5) * 2,
-        alpha: 1.0,
-        size: 2 + Math.random() * 3,
-        life: 0,
-        maxLife: 60 + Math.random() * 60 // 60~120フレーム
-      };
-
-      particlesRef.current.push(particle);
     }
 
-    // 粒子を更新・描画
-    particlesRef.current = particlesRef.current.filter(particle => {
-      particle.x += particle.vx * intensity;
-      particle.y += particle.vy * intensity;
-      particle.life += 1;
-      particle.alpha = 1 - (particle.life / particle.maxLife);
+    ctx.restore();
 
-      if (particle.alpha <= 0) return false;
-
-      // 描画
+    // 画面全体に柔らかい黄色のグロー
+    if (intensity > 0.6) {
       ctx.save();
-      ctx.globalAlpha = particle.alpha;
-      ctx.fillStyle = '#FFD700'; // ゴールド
-      ctx.shadowBlur = 10;
-      ctx.shadowColor = '#FFD700';
-      ctx.beginPath();
-      ctx.arc(particle.x, particle.y, particle.size, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.globalAlpha = (intensity - 0.6) * 0.3;
+      const gradient = ctx.createRadialGradient(
+        width / 2, height / 2, 0,
+        width / 2, height / 2, Math.max(width, height) * 0.6
+      );
+      gradient.addColorStop(0, 'rgba(255, 240, 150, 0.2)');
+      gradient.addColorStop(1, 'rgba(255, 240, 150, 0)');
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, width, height);
       ctx.restore();
-
-      return true;
-    });
+    }
   };
 
   /**
@@ -167,7 +181,7 @@ export const useEffectRenderer = ({ canvasRef, currentEffect }: UseEffectRendere
   };
 
   /**
-   * Excitement エフェクト: 驚き時の放射状の光線
+   * Thunder Flash エフェクト (驚き): 稲妻が画面を走る
    */
   const renderExcitement = (
     ctx: CanvasRenderingContext2D,
@@ -176,50 +190,92 @@ export const useEffectRenderer = ({ canvasRef, currentEffect }: UseEffectRendere
     intensity: number,
     _elapsed: number
   ) => {
-    const centerX = width / 2;
-    const centerY = height / 2;
-    const rayCount = Math.floor(8 + intensity * 12); // 8~20本の光線
+    const time = performance.now() / 1000;
+
+    // 稲妻の数（intensity に応じて 2~5本）
+    const lightningCount = Math.floor(2 + intensity * 3);
 
     ctx.save();
-    ctx.globalAlpha = 0.3 + intensity * 0.4;
 
-    for (let i = 0; i < rayCount; i++) {
-      const angle = (Math.PI * 2 * i) / rayCount + performance.now() * 0.001;
-      const length = 100 + intensity * 200;
+    for (let i = 0; i < lightningCount; i++) {
+      // ランダムな開始位置（上部）
+      const seed = i * 345.678 + Math.floor(time * 2); // 定期的に変化
+      const startX = (Math.sin(seed) * 0.5 + 0.5) * width;
+      const startY = 0;
 
-      const gradient = ctx.createLinearGradient(
-        centerX,
-        centerY,
-        centerX + Math.cos(angle) * length,
-        centerY + Math.sin(angle) * length
-      );
+      // 稲妻の色（黄色〜白）
+      const colors = [
+        'rgba(255, 255, 100, 0.9)',
+        'rgba(255, 255, 255, 0.95)',
+        'rgba(255, 240, 100, 0.85)'
+      ];
+      const color = colors[i % colors.length];
 
-      gradient.addColorStop(0, 'rgba(255, 215, 0, 0.8)'); // ゴールド
-      gradient.addColorStop(0.5, 'rgba(255, 165, 0, 0.4)'); // オレンジ
-      gradient.addColorStop(1, 'rgba(255, 165, 0, 0)');
-
-      ctx.strokeStyle = gradient;
-      ctx.lineWidth = 3 + intensity * 5;
+      // 稲妻の経路を描画（ジグザグ）
       ctx.beginPath();
-      ctx.moveTo(centerX, centerY);
-      ctx.lineTo(
-        centerX + Math.cos(angle) * length,
-        centerY + Math.sin(angle) * length
-      );
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 4 + intensity * 6;
+      ctx.shadowBlur = 20 + intensity * 10;
+      ctx.shadowColor = color;
+      ctx.lineCap = 'round';
+
+      let x = startX;
+      let y = startY;
+      ctx.moveTo(x, y);
+
+      // ジグザグに下降
+      const segments = 8 + Math.floor(intensity * 4);
+      for (let j = 0; j < segments; j++) {
+        const nextX = x + (Math.random() - 0.5) * 80;
+        const nextY = y + (height / segments);
+        ctx.lineTo(nextX, nextY);
+        x = nextX;
+        y = nextY;
+      }
+
+      ctx.stroke();
+
+      // 二重線効果（より明るい中心線）
+      ctx.beginPath();
+      ctx.strokeStyle = 'rgba(255, 255, 255, 1)';
+      ctx.lineWidth = 2;
+      ctx.shadowBlur = 30;
+      x = startX;
+      y = startY;
+      ctx.moveTo(x, y);
+      for (let j = 0; j < segments; j++) {
+        const nextX = x + (Math.random() - 0.5) * 80;
+        const nextY = y + (height / segments);
+        ctx.lineTo(nextX, nextY);
+        x = nextX;
+        y = nextY;
+      }
       ctx.stroke();
     }
 
     ctx.restore();
 
-    // 中心に輝く円
+    // フラッシュ効果（画面全体が一瞬明るくなる）
+    if (intensity > 0.5) {
+      const flashAlpha = (Math.sin(time * 10) * 0.5 + 0.5) * (intensity - 0.5) * 0.4;
+      ctx.save();
+      ctx.globalAlpha = flashAlpha;
+      ctx.fillStyle = 'rgba(255, 255, 200, 0.3)';
+      ctx.fillRect(0, 0, width, height);
+      ctx.restore();
+    }
+
+    // 稲妻の光が反射する効果（画面端）
     ctx.save();
-    ctx.globalAlpha = 0.6;
-    ctx.fillStyle = 'rgba(255, 215, 0, 0.8)';
-    ctx.shadowBlur = 30 + intensity * 20;
-    ctx.shadowColor = 'rgba(255, 215, 0, 0.8)';
-    ctx.beginPath();
-    ctx.arc(centerX, centerY, 20 + intensity * 30, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.globalAlpha = 0.3 + intensity * 0.3;
+    const glowGradient = ctx.createRadialGradient(
+      width / 2, height / 2, 0,
+      width / 2, height / 2, Math.max(width, height) * 0.7
+    );
+    glowGradient.addColorStop(0, 'rgba(255, 255, 150, 0.2)');
+    glowGradient.addColorStop(1, 'rgba(255, 255, 150, 0)');
+    ctx.fillStyle = glowGradient;
+    ctx.fillRect(0, 0, width, height);
     ctx.restore();
   };
 
@@ -441,7 +497,7 @@ export const useEffectRenderer = ({ canvasRef, currentEffect }: UseEffectRendere
   };
 
   /**
-   * Focus エフェクト: 集中時の青い集中線と静かな光の粒子
+   * Laser Lines エフェクト (集中): 赤・青のレーザー集中線
    */
   const renderFocus = (
     ctx: CanvasRenderingContext2D,
@@ -454,17 +510,23 @@ export const useEffectRenderer = ({ canvasRef, currentEffect }: UseEffectRendere
     const centerY = height / 2;
     const time = performance.now() * 0.001;
 
-    // 四隅から中心に向かう青い集中線
+    // 中心から外側へのレーザー集中線
     ctx.save();
-    ctx.globalAlpha = 0.3 + intensity * 0.4;
+    ctx.globalAlpha = 0.5 + intensity * 0.4;
 
-    const lineCount = Math.floor(8 + intensity * 12); // 8~20本の集中線
+    const lineCount = Math.floor(12 + intensity * 16); // 12~28本の集中線
     const maxLength = Math.sqrt(width * width + height * height) / 2;
 
     for (let i = 0; i < lineCount; i++) {
       const angle = (Math.PI * 2 * i) / lineCount;
-      const length = maxLength * (0.7 + intensity * 0.3);
-      const pulse = Math.sin(time * 2 + i * 0.5) * 0.1 + 0.9;
+      const length = maxLength * (0.8 + intensity * 0.2);
+      const pulse = Math.sin(time * 3 + i * 0.3) * 0.15 + 0.85;
+
+      // 赤と青を交互に
+      const isRed = i % 2 === 0;
+      const color = isRed
+        ? `rgba(255, 50, 50, ${0.7 + intensity * 0.3})`   // 赤
+        : `rgba(50, 150, 255, ${0.7 + intensity * 0.3})`; // 青
 
       // 中心から外側への線
       const gradient = ctx.createLinearGradient(
@@ -474,12 +536,14 @@ export const useEffectRenderer = ({ canvasRef, currentEffect }: UseEffectRendere
         centerY + Math.sin(angle) * length * pulse
       );
 
-      gradient.addColorStop(0, 'rgba(64, 156, 255, 0.6)'); // 明るい青
-      gradient.addColorStop(0.5, 'rgba(64, 156, 255, 0.3)');
-      gradient.addColorStop(1, 'rgba(64, 156, 255, 0)');
+      gradient.addColorStop(0, color);
+      gradient.addColorStop(0.6, color.replace(/[\d.]+\)$/g, '0.4)'));
+      gradient.addColorStop(1, color.replace(/[\d.]+\)$/g, '0)'));
 
       ctx.strokeStyle = gradient;
-      ctx.lineWidth = 2 + intensity * 2;
+      ctx.lineWidth = 3 + intensity * 4;
+      ctx.shadowBlur = 15 + intensity * 10;
+      ctx.shadowColor = isRed ? 'rgba(255, 50, 50, 0.8)' : 'rgba(50, 150, 255, 0.8)';
       ctx.beginPath();
       ctx.moveTo(centerX, centerY);
       ctx.lineTo(

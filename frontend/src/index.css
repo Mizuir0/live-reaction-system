@@ -22,3 +22,15 @@ code {
 iframe {
   border: none;
 }
+
+/* ローディングスピナーアニメーション */
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* パルスアニメーション */
+@keyframes pulse {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
+}

@@ -235,6 +235,9 @@ const ViewingScreen: React.FC<ViewingScreenProps> = ({ videoId, userId }) => {
   // リアクション検出が有効かどうか
   const isReactionActive = cameraReady && mediaPipeReady && wsConnected;
 
+  // システムの準備状態を判定
+  const isSystemReady = wsConnected && cameraReady && mediaPipeReady;
+
   return (
     <div style={styles.container}>
       {/* カメラ映像（非表示、検出用） */}
@@ -248,13 +251,57 @@ const ViewingScreen: React.FC<ViewingScreenProps> = ({ videoId, userId }) => {
       {/* メインビデオエリア */}
       <div style={styles.videoArea}>
         {/* Canvas エフェクト領域（背景レイヤー） */}
-        <canvas 
-          ref={canvasRef} 
+        <canvas
+          ref={canvasRef}
           style={styles.canvas}
         />
-        
+
+        {/* 接続待機オーバーレイ */}
+        {!isSystemReady && (
+          <div style={styles.loadingOverlay}>
+            <div style={styles.loadingContent}>
+              <div style={styles.spinner}></div>
+              <h2 style={styles.loadingTitle}>システム起動中...</h2>
+              <p style={styles.loadingText}>
+                サーバーに接続しています。初回アクセス時は1分程度かかる場合があります。
+              </p>
+              <div style={styles.statusList}>
+                <div style={styles.statusItem}>
+                  <span style={wsConnected ? styles.statusIconSuccess : styles.statusIconWaiting}>
+                    {wsConnected ? '✓' : '○'}
+                  </span>
+                  <span style={styles.statusLabel}>
+                    サーバー接続 {wsConnected ? '完了' : '接続中...'}
+                  </span>
+                </div>
+                <div style={styles.statusItem}>
+                  <span style={cameraReady ? styles.statusIconSuccess : styles.statusIconWaiting}>
+                    {cameraReady ? '✓' : '○'}
+                  </span>
+                  <span style={styles.statusLabel}>
+                    カメラ {cameraReady ? '準備完了' : '準備中...'}
+                  </span>
+                </div>
+                <div style={styles.statusItem}>
+                  <span style={mediaPipeReady ? styles.statusIconSuccess : styles.statusIconWaiting}>
+                    {mediaPipeReady ? '✓' : '○'}
+                  </span>
+                  <span style={styles.statusLabel}>
+                    AI検出システム {mediaPipeReady ? '準備完了' : '読み込み中...'}
+                  </span>
+                </div>
+              </div>
+              {wsError && (
+                <div style={styles.errorMessage}>
+                  ⚠️ エラー: {wsError}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* YouTube プレイヤー */}
-        <div style={styles.playerWrapper}>
+        <div style={{...styles.playerWrapper, pointerEvents: isSystemReady ? 'auto' : 'none', opacity: isSystemReady ? 1 : 0.3}}>
           <YouTube
             videoId={videoId ?? ''}
             opts={opts as YouTubeProps['opts']}
@@ -512,6 +559,80 @@ const styles: { [key: string]: React.CSSProperties } = {
     fontSize: '12px',
     color: '#888',
     margin: '5px 0'
+  },
+  loadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    width: '100%',
+    height: '100%',
+    backgroundColor: 'rgba(0, 0, 0, 0.95)',
+    display: 'flex',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 10
+  },
+  loadingContent: {
+    textAlign: 'center',
+    color: 'white',
+    maxWidth: '500px',
+    padding: '40px'
+  },
+  spinner: {
+    width: '60px',
+    height: '60px',
+    border: '4px solid rgba(255, 255, 255, 0.1)',
+    borderTop: '4px solid white',
+    borderRadius: '50%',
+    margin: '0 auto 30px',
+    animation: 'spin 1s linear infinite'
+  },
+  loadingTitle: {
+    fontSize: '24px',
+    fontWeight: 'bold',
+    marginBottom: '15px'
+  },
+  loadingText: {
+    fontSize: '16px',
+    color: '#ccc',
+    marginBottom: '30px',
+    lineHeight: '1.5'
+  },
+  statusList: {
+    textAlign: 'left',
+    maxWidth: '350px',
+    margin: '0 auto'
+  },
+  statusIconSuccess: {
+    display: 'inline-block',
+    width: '24px',
+    height: '24px',
+    backgroundColor: '#4caf50',
+    borderRadius: '50%',
+    textAlign: 'center',
+    lineHeight: '24px',
+    fontSize: '16px',
+    fontWeight: 'bold'
+  },
+  statusIconWaiting: {
+    display: 'inline-block',
+    width: '24px',
+    height: '24px',
+    backgroundColor: '#666',
+    borderRadius: '50%',
+    textAlign: 'center',
+    lineHeight: '24px',
+    fontSize: '16px',
+    animation: 'pulse 1.5s ease-in-out infinite'
+  },
+  errorMessage: {
+    marginTop: '20px',
+    padding: '15px',
+    backgroundColor: 'rgba(244, 67, 54, 0.2)',
+    border: '1px solid #f44336',
+    borderRadius: '8px',
+    fontSize: '14px',
+    color: '#ff6b6b'
   }
 };
 

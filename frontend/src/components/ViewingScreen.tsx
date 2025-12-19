@@ -351,8 +351,8 @@ const ViewingScreen: React.FC<ViewingScreenProps> = ({ videoId, userId }) => {
 
     console.log(`⏱️ 時刻同期チェック: ホスト=${hostTime.toFixed(2)}s, 自分=${myTime.toFixed(2)}s, 差分=${timeDiff.toFixed(2)}s`);
 
-    // 2秒以上のズレがあれば補正
-    if (timeDiff > 2.0) {
+    // 1秒以上のズレがあれば補正
+    if (timeDiff > 1.0) {
       console.log(`🔧 時刻補正実行: ${myTime.toFixed(2)}s → ${hostTime.toFixed(2)}s`);
       playerRef.current.seekTo(hostTime, true);
     }

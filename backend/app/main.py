@@ -576,6 +576,22 @@ async def websocket_endpoint(websocket: WebSocket):
             message_type = data.get('type')
 
             # ========================
+            # 動画URL選択イベント（experiment群のホストのみ）
+            # ========================
+            if message_type == 'video_url_selected':
+                # ホストが動画URLを選択したことをexperiment群全体にブロードキャスト
+                if experiment_group == 'experiment' and manager.user_is_host.get(user_id, False):
+                    video_id = data.get('videoId', '')
+                    print(f"📺 動画URL選択イベント受信 ({user_id}): {video_id}")
+                    # experiment群の他のメンバーにブロードキャスト
+                    await manager.broadcast_to_group({
+                        "type": "video_url_selected",
+                        "videoId": video_id,
+                        "timestamp": data.get('timestamp', int(time.time() * 1000))
+                    }, 'experiment')
+                continue
+
+            # ========================
             # 動画同期イベント（experiment群のみ）
             # ========================
             if message_type in ['video_play', 'video_pause', 'video_seek']:

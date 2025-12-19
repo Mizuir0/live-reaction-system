@@ -26,6 +26,11 @@ interface TimeSyncResponse {
   timestamp: number;
 }
 
+interface VideoUrlSelectedEvent {
+  videoId: string;
+  timestamp: number;
+}
+
 interface UseWebSocketReturn {
   isConnected: boolean;
   error: string | null;
@@ -33,12 +38,14 @@ interface UseWebSocketReturn {
   sendVideoEvent: (type: 'video_play' | 'video_pause' | 'video_seek', currentTime: number) => void;
   sendTimeSyncRequest: () => void;
   sendTimeSyncResponse: (requesterId: string, currentTime: number) => void;
+  sendVideoUrlSelected: (videoId: string) => void;
   lastResponse: any;
   currentEffect: EffectInstruction | null;
   videoSyncEvent: VideoSyncEvent | null;
   connectionCount: ConnectionCount | null;
   timeSyncRequest: TimeSyncRequest | null;
   timeSyncResponse: TimeSyncResponse | null;
+  videoUrlSelectedEvent: VideoUrlSelectedEvent | null;
 }
 
 /**
@@ -56,6 +63,7 @@ export const useWebSocket = (userId: string, experimentGroup: ExperimentGroup = 
   const [connectionCount, setConnectionCount] = useState<ConnectionCount | null>(null);
   const [timeSyncRequest, setTimeSyncRequest] = useState<TimeSyncRequest | null>(null);
   const [timeSyncResponse, setTimeSyncResponse] = useState<TimeSyncResponse | null>(null);
+  const [videoUrlSelectedEvent, setVideoUrlSelectedEvent] = useState<VideoUrlSelectedEvent | null>(null);
 
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<number | null>(null);
@@ -133,6 +141,13 @@ export const useWebSocket = (userId: string, experimentGroup: ExperimentGroup = 
             console.log('⏱️ 時刻同期レスポンス受信:', data.currentTime);
             setTimeSyncResponse({
               currentTime: data.currentTime,
+              timestamp: data.timestamp
+            });
+          } else if (data.type === 'video_url_selected') {
+            // 動画URL選択イベントを受信（experiment群の参加者）
+            console.log('📺 動画URL選択イベント受信:', data.videoId);
+            setVideoUrlSelectedEvent({
+              videoId: data.videoId,
               timestamp: data.timestamp
             });
           }
@@ -263,6 +278,29 @@ export const useWebSocket = (userId: string, experimentGroup: ExperimentGroup = 
   }, []);
 
   /**
+   * 動画URL選択イベントを送信（ホスト → experiment群全体）
+   */
+  const sendVideoUrlSelected = useCallback((videoId: string) => {
+    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+      console.warn('⚠️ WebSocketが接続されていません');
+      return;
+    }
+
+    const videoUrlSelectedEvent = {
+      type: 'video_url_selected',
+      videoId,
+      timestamp: Date.now()
+    };
+
+    try {
+      wsRef.current.send(JSON.stringify(videoUrlSelectedEvent));
+      console.log('📺 動画URL選択イベント送信:', videoId);
+    } catch (err) {
+      console.error('❌ 動画URL選択イベント送信エラー:', err);
+    }
+  }, []);
+
+  /**
    * 初回接続
    */
   useEffect(() => {
@@ -287,11 +325,13 @@ export const useWebSocket = (userId: string, experimentGroup: ExperimentGroup = 
     sendVideoEvent,
     sendTimeSyncRequest,
     sendTimeSyncResponse,
+    sendVideoUrlSelected,
     lastResponse,
     currentEffect,
     videoSyncEvent,
     connectionCount,
     timeSyncRequest,
-    timeSyncResponse
+    timeSyncResponse,
+    videoUrlSelectedEvent
   };
 };

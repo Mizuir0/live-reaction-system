@@ -450,14 +450,6 @@ const ViewingScreen: React.FC<ViewingScreenProps> = ({ videoId, userId }) => {
             onStateChange={onPlayerStateChange}
             style={styles.player}
           />
-          {/* experiment群の参加者モード表示 */}
-          {experimentGroup === 'experiment' && !isHost && isSystemReady && (
-            <div style={styles.participantBadge}>
-              <span style={styles.participantText}>
-                ⏺️ 同期モード | ホストが動画を操作中
-              </span>
-            </div>
-          )}
           {/* experiment群のホストモード表示 */}
           {experimentGroup === 'experiment' && isHost && isSystemReady && (
             <div style={styles.hostBadge}>

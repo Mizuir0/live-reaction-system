@@ -56,16 +56,18 @@ def log_reaction(user_id: str, data: dict):
         timestamp = int(time.time() * 1000)
         states = data.get('states', {})
         events = data.get('events', {})
+        video_time = data.get('videoTime')  # 動画の現在時刻を取得
 
         cursor.execute("""
             INSERT INTO reactions_log (
-                user_id, timestamp,
+                user_id, timestamp, video_time,
                 is_smiling, is_surprised, is_concentrating, is_hand_up,
                 nod_count, sway_vertical_count, cheer_count, clap_count
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """, (
             user_id,
             timestamp,
+            video_time,
             states.get('isSmiling', False),
             states.get('isSurprised', False),
             states.get('isConcentrating', False),
@@ -83,13 +85,15 @@ def log_effect(effect_data: dict):
         cursor = conn.cursor()
 
         timestamp = effect_data.get('timestamp', int(time.time() * 1000))
+        video_time = effect_data.get('videoTime')  # 動画の現在時刻を取得
 
         cursor.execute("""
             INSERT INTO effects_log (
-                timestamp, effect_type, intensity, duration_ms
-            ) VALUES (%s, %s, %s, %s)
+                timestamp, video_time, effect_type, intensity, duration_ms
+            ) VALUES (%s, %s, %s, %s, %s)
         """, (
             timestamp,
+            video_time,
             effect_data.get('effectType', ''),
             effect_data.get('intensity', 0.0),
             effect_data.get('durationMs', 0)

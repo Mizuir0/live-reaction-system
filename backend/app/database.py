@@ -115,6 +115,7 @@ def init_database():
                     id SERIAL PRIMARY KEY,
                     user_id TEXT NOT NULL,
                     timestamp BIGINT NOT NULL,
+                    video_time REAL,
                     is_smiling BOOLEAN,
                     is_surprised BOOLEAN,
                     is_concentrating BOOLEAN,
@@ -132,6 +133,7 @@ def init_database():
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     user_id TEXT NOT NULL,
                     timestamp INTEGER NOT NULL,
+                    video_time REAL,
                     is_smiling BOOLEAN,
                     is_surprised BOOLEAN,
                     is_concentrating BOOLEAN,
@@ -151,6 +153,7 @@ def init_database():
                 CREATE TABLE IF NOT EXISTS effects_log (
                     id SERIAL PRIMARY KEY,
                     timestamp BIGINT NOT NULL,
+                    video_time REAL,
                     effect_type TEXT NOT NULL,
                     intensity REAL NOT NULL,
                     duration_ms INTEGER NOT NULL
@@ -161,12 +164,60 @@ def init_database():
                 CREATE TABLE IF NOT EXISTS effects_log (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     timestamp INTEGER NOT NULL,
+                    video_time REAL,
                     effect_type TEXT NOT NULL,
                     intensity REAL NOT NULL,
                     duration_ms INTEGER NOT NULL
                 )
             """)
         print("✅ effects_logテーブルを作成しました")
+
+        # 既存テーブルにvideo_timeカラムを追加（マイグレーション）
+        try:
+            # reactions_logテーブルにvideo_timeカラムがあるか確認
+            if DB_TYPE == "postgresql":
+                cursor.execute("""
+                    SELECT column_name FROM information_schema.columns
+                    WHERE table_name='reactions_log' AND column_name='video_time'
+                """)
+            else:
+                cursor.execute("PRAGMA table_info(reactions_log)")
+
+            columns = cursor.fetchall()
+            has_video_time = False
+            if DB_TYPE == "postgresql":
+                has_video_time = len(columns) > 0
+            else:
+                has_video_time = any(col[1] == 'video_time' for col in columns)
+
+            if not has_video_time:
+                cursor.execute("ALTER TABLE reactions_log ADD COLUMN video_time REAL")
+                print("✅ reactions_logテーブルにvideo_timeカラムを追加しました")
+        except Exception as e:
+            print(f"ℹ️ reactions_logマイグレーション: {e}")
+
+        try:
+            # effects_logテーブルにvideo_timeカラムがあるか確認
+            if DB_TYPE == "postgresql":
+                cursor.execute("""
+                    SELECT column_name FROM information_schema.columns
+                    WHERE table_name='effects_log' AND column_name='video_time'
+                """)
+            else:
+                cursor.execute("PRAGMA table_info(effects_log)")
+
+            columns = cursor.fetchall()
+            has_video_time = False
+            if DB_TYPE == "postgresql":
+                has_video_time = len(columns) > 0
+            else:
+                has_video_time = any(col[1] == 'video_time' for col in columns)
+
+            if not has_video_time:
+                cursor.execute("ALTER TABLE effects_log ADD COLUMN video_time REAL")
+                print("✅ effects_logテーブルにvideo_timeカラムを追加しました")
+        except Exception as e:
+            print(f"ℹ️ effects_logマイグレーション: {e}")
 
         conn.commit()
 

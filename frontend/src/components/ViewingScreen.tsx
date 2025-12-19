@@ -25,6 +25,7 @@ const ViewingScreen: React.FC<ViewingScreenProps> = ({ videoId, userId }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const playerRef = useRef<any>(null); // YouTubeプレーヤーのref
   const [playerReady, setPlayerReady] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(false); // 動画再生状態
   const [showDebug, setShowDebug] = useState(false); // デフォルトは非表示
   const [showLandmarks, setShowLandmarks] = useState(false); // ランドマーク表示
   const detectionIntervalRef = useRef<number | null>(null);
@@ -179,13 +180,23 @@ const ViewingScreen: React.FC<ViewingScreenProps> = ({ videoId, userId }) => {
     console.log('📡 リアクションデータ送信ループを開始');
 
     const sendInterval = window.setInterval(() => {
+      // 動画再生中のみデータを送信
+      if (!isPlaying) {
+        console.log('⏸️ 動画停止中のため送信スキップ');
+        return;
+      }
+
       // refから最新の値を取得
       const currentStates = statesRef.current;
       const currentEvents = eventsRef.current;
-      
+
+      // 動画の現在時刻を取得
+      const videoTime = playerRef.current?.getCurrentTime() ?? 0;
+
       sendReactionData({
         states: currentStates,
-        events: currentEvents
+        events: currentEvents,
+        videoTime: videoTime
       });
     }, 1000); // 1秒ごと
 
@@ -197,7 +208,7 @@ const ViewingScreen: React.FC<ViewingScreenProps> = ({ videoId, userId }) => {
         console.log('📡 リアクションデータ送信ループを停止');
       }
     };
-  }, [wsConnected, sendReactionData]); // wsConnectedとsendReactionDataのみ依存
+  }, [wsConnected, sendReactionData, isPlaying]); // isPlayingも依存配列に追加
 
   useEffect(() => {
     // Canvas の初期化（後のステップで描画処理を追加）
@@ -240,6 +251,9 @@ const ViewingScreen: React.FC<ViewingScreenProps> = ({ videoId, userId }) => {
   const onPlayerStateChange: YouTubeProps['onStateChange'] = (event) => {
     console.log('Player State Changed:', event.data);
     // -1: 未開始, 0: 終了, 1: 再生中, 2: 一時停止, 3: バッファリング中, 5: 頭出し済み
+
+    // 再生状態を更新
+    setIsPlaying(event.data === 1);
 
     // experiment群のホストの場合、再生/一時停止をWebSocketで同期
     if (experimentGroup === 'experiment' && isHost && playerRef.current) {

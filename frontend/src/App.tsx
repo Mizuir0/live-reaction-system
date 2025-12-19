@@ -112,6 +112,20 @@ function App() {
             <p style={styles.waitingText}>
               ホストが動画を選択するまでお待ちください。
             </p>
+            <div style={styles.readyButtonContainer}>
+              <button
+                onClick={() => {
+                  console.log('✅ 準備完了ボタンがクリックされました');
+                  // ユーザー操作を記録（自動再生を許可するため）
+                }}
+                style={styles.readyButton}
+              >
+                📺 準備完了（自動再生を許可）
+              </button>
+              <p style={styles.readyButtonNote}>
+                ※ ホストが動画を開始したときに自動再生するため、このボタンをクリックしてください
+              </p>
+            </div>
             <p style={styles.waitingSubText}>
               実験グループ: <strong>experiment</strong>
             </p>
@@ -183,6 +197,28 @@ const styles: { [key: string]: React.CSSProperties } = {
     fontSize: '14px',
     color: '#999',
     marginTop: '40px'
+  },
+  readyButtonContainer: {
+    marginTop: '40px',
+    marginBottom: '20px'
+  },
+  readyButton: {
+    padding: '16px 32px',
+    fontSize: '18px',
+    fontWeight: 'bold',
+    color: 'white',
+    backgroundColor: '#4CAF50',
+    border: 'none',
+    borderRadius: '8px',
+    cursor: 'pointer',
+    transition: 'all 0.3s',
+    boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
+  },
+  readyButtonNote: {
+    fontSize: '14px',
+    color: '#aaa',
+    marginTop: '16px',
+    lineHeight: '1.5'
   },
   debugButton: {
     position: 'fixed',

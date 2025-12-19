@@ -189,7 +189,6 @@ export const useEffectRenderer = ({ canvasRef, currentEffect }: UseEffectRendere
       const noteCount = Math.floor(10 + intensity * 20); // 10~30個の音符
 
       for (let i = 0; i < noteCount; i++) {
-        const seed = i * 123.456;
         const basePos = megaphonePositions[i % megaphonePositions.length];
         const angle = -Math.PI / 3 + (Math.random() * Math.PI * 2) / 3;
         const distance = (time * 100 + i * 50) % 300;

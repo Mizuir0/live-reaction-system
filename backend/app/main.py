@@ -393,6 +393,13 @@ class ConnectionManager:
         if message.get('type') == 'effect' and sent_count > 0:
             print(f"📡 エフェクト指示を{target_group}グループの{sent_count}クライアントに配信")
 
+    def get_host_user_id(self, group: str) -> Optional[str]:
+        """指定されたグループのホストのユーザーIDを取得"""
+        for user_id, user_group in self.user_groups.items():
+            if user_group == group and self.user_is_host.get(user_id, False):
+                return user_id
+        return None
+
     def generate_random_effect(self) -> dict:
         """ランダムなエフェクトを生成（対照群1用）"""
         effect_type = random.choice(EFFECT_TYPES)
@@ -581,6 +588,38 @@ async def websocket_endpoint(websocket: WebSocket):
                         "currentTime": data.get('currentTime', 0),
                         "timestamp": data.get('timestamp', int(time.time() * 1000))
                     }, 'experiment')
+                continue
+
+            # ========================
+            # 時刻同期リクエスト（experiment群の参加者 → ホスト）
+            # ========================
+            if message_type == 'time_sync_request':
+                # 被験者からホストへの時刻問い合わせ
+                host_user_id = manager.get_host_user_id(experiment_group)
+                if host_user_id:
+                    print(f"⏱️ 時刻同期リクエスト: {user_id} → {host_user_id}")
+                    await manager.send_personal_message({
+                        "type": "time_sync_request",
+                        "requesterId": user_id,
+                        "timestamp": data.get('timestamp', int(time.time() * 1000))
+                    }, host_user_id)
+                else:
+                    print(f"⚠️ 時刻同期リクエスト: ホストが見つかりません (group: {experiment_group})")
+                continue
+
+            # ========================
+            # 時刻同期レスポンス（ホスト → 参加者）
+            # ========================
+            if message_type == 'time_sync_response':
+                # ホストから被験者への時刻応答
+                requester_id = data.get('requesterId')
+                if requester_id:
+                    print(f"⏱️ 時刻同期レスポンス: {user_id} → {requester_id} (time: {data.get('currentTime', 0):.2f}s)")
+                    await manager.send_personal_message({
+                        "type": "time_sync_response",
+                        "currentTime": data.get('currentTime', 0),
+                        "timestamp": data.get('timestamp', int(time.time() * 1000))
+                    }, requester_id)
                 continue
 
             # ========================

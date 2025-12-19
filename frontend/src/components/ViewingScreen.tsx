@@ -79,7 +79,19 @@ const ViewingScreen: React.FC<ViewingScreenProps> = ({ videoId, userId }) => {
     startAudio,
     stopAudio
   } = useAudioDetection();
-  const { isConnected: wsConnected, error: wsError, sendReactionData, sendVideoEvent, currentEffect, videoSyncEvent, connectionCount } = useWebSocket(userId, experimentGroup, isHost);
+  const {
+    isConnected: wsConnected,
+    error: wsError,
+    sendReactionData,
+    sendVideoEvent,
+    sendTimeSyncRequest,
+    sendTimeSyncResponse,
+    currentEffect,
+    videoSyncEvent,
+    connectionCount,
+    timeSyncRequest,
+    timeSyncResponse
+  } = useWebSocket(userId, experimentGroup, isHost);
 
   // エフェクトレンダラー
   useEffectRenderer({ canvasRef, currentEffect });
@@ -292,6 +304,59 @@ const ViewingScreen: React.FC<ViewingScreenProps> = ({ videoId, userId }) => {
       player.seekTo(videoSyncEvent.currentTime, true);
     }
   }, [videoSyncEvent, experimentGroup, isHost]);
+
+  /**
+   * 時刻同期リクエスト処理（ホスト側）
+   * 被験者から時刻問い合わせがあったら現在の動画時刻を返す
+   */
+  useEffect(() => {
+    if (!timeSyncRequest || !isHost || !playerRef.current) {
+      return;
+    }
+
+    const currentTime = playerRef.current.getCurrentTime();
+    console.log(`⏱️ 時刻同期リクエストに応答: ${currentTime.toFixed(2)}s → ${timeSyncRequest.requesterId}`);
+    sendTimeSyncResponse(timeSyncRequest.requesterId, currentTime);
+  }, [timeSyncRequest, isHost, sendTimeSyncResponse]);
+
+  /**
+   * 定期的な時刻同期リクエスト（被験者側）
+   * 5秒ごとにホストに現在時刻を問い合わせる
+   */
+  useEffect(() => {
+    if (experimentGroup !== 'experiment' || isHost || !wsConnected || !playerReady) {
+      return;
+    }
+
+    console.log('⏱️ 定期的な時刻同期を開始');
+    const syncInterval = setInterval(() => {
+      sendTimeSyncRequest();
+    }, 5000); // 5秒ごと
+
+    return () => clearInterval(syncInterval);
+  }, [experimentGroup, isHost, wsConnected, playerReady, sendTimeSyncRequest]);
+
+  /**
+   * 時刻同期レスポンス処理（被験者側）
+   * ホストからの時刻を受け取り、ズレがあれば補正
+   */
+  useEffect(() => {
+    if (!timeSyncResponse || isHost || !playerRef.current) {
+      return;
+    }
+
+    const hostTime = timeSyncResponse.currentTime;
+    const myTime = playerRef.current.getCurrentTime();
+    const timeDiff = Math.abs(hostTime - myTime);
+
+    console.log(`⏱️ 時刻同期チェック: ホスト=${hostTime.toFixed(2)}s, 自分=${myTime.toFixed(2)}s, 差分=${timeDiff.toFixed(2)}s`);
+
+    // 2秒以上のズレがあれば補正
+    if (timeDiff > 2.0) {
+      console.log(`🔧 時刻補正実行: ${myTime.toFixed(2)}s → ${hostTime.toFixed(2)}s`);
+      playerRef.current.seekTo(hostTime, true);
+    }
+  }, [timeSyncResponse, isHost]);
 
   /**
    * YouTube プレイヤーのオプション

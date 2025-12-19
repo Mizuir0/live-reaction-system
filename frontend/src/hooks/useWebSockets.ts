@@ -16,15 +16,29 @@ interface ConnectionCount {
   group: string;
 }
 
+interface TimeSyncRequest {
+  requesterId: string;
+  timestamp: number;
+}
+
+interface TimeSyncResponse {
+  currentTime: number;
+  timestamp: number;
+}
+
 interface UseWebSocketReturn {
   isConnected: boolean;
   error: string | null;
   sendReactionData: (data: Omit<ReactionData, 'userId' | 'timestamp'>) => void;
   sendVideoEvent: (type: 'video_play' | 'video_pause' | 'video_seek', currentTime: number) => void;
+  sendTimeSyncRequest: () => void;
+  sendTimeSyncResponse: (requesterId: string, currentTime: number) => void;
   lastResponse: any;
   currentEffect: EffectInstruction | null;
   videoSyncEvent: VideoSyncEvent | null;
   connectionCount: ConnectionCount | null;
+  timeSyncRequest: TimeSyncRequest | null;
+  timeSyncResponse: TimeSyncResponse | null;
 }
 
 /**
@@ -40,6 +54,8 @@ export const useWebSocket = (userId: string, experimentGroup: ExperimentGroup = 
   const [currentEffect, setCurrentEffect] = useState<EffectInstruction | null>(null);
   const [videoSyncEvent, setVideoSyncEvent] = useState<VideoSyncEvent | null>(null);
   const [connectionCount, setConnectionCount] = useState<ConnectionCount | null>(null);
+  const [timeSyncRequest, setTimeSyncRequest] = useState<TimeSyncRequest | null>(null);
+  const [timeSyncResponse, setTimeSyncResponse] = useState<TimeSyncResponse | null>(null);
 
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<number | null>(null);
@@ -105,6 +121,20 @@ export const useWebSocket = (userId: string, experimentGroup: ExperimentGroup = 
               total: data.total,
               group: data.group
             });
+          } else if (data.type === 'time_sync_request') {
+            // 時刻同期リクエストを受信（ホスト側）
+            console.log('⏱️ 時刻同期リクエスト受信:', data.requesterId);
+            setTimeSyncRequest({
+              requesterId: data.requesterId,
+              timestamp: data.timestamp
+            });
+          } else if (data.type === 'time_sync_response') {
+            // 時刻同期レスポンスを受信（被験者側）
+            console.log('⏱️ 時刻同期レスポンス受信:', data.currentTime);
+            setTimeSyncResponse({
+              currentTime: data.currentTime,
+              timestamp: data.timestamp
+            });
           }
         } catch (err) {
           console.error('❌ メッセージのパースエラー:', err);
@@ -164,7 +194,7 @@ export const useWebSocket = (userId: string, experimentGroup: ExperimentGroup = 
   }, [userId]);
 
   /**
-   * 動画同期イベントを送信（control2群のホスト用）
+   * 動画同期イベントを送信（experiment群のホスト用）
    */
   const sendVideoEvent = useCallback((type: 'video_play' | 'video_pause' | 'video_seek', currentTime: number) => {
     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
@@ -183,6 +213,52 @@ export const useWebSocket = (userId: string, experimentGroup: ExperimentGroup = 
       console.log('🎬 動画同期イベント送信:', videoEvent);
     } catch (err) {
       console.error('❌ 動画同期イベント送信エラー:', err);
+    }
+  }, []);
+
+  /**
+   * 時刻同期リクエストを送信（被験者 → ホスト）
+   */
+  const sendTimeSyncRequest = useCallback(() => {
+    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+      console.warn('⚠️ WebSocketが接続されていません');
+      return;
+    }
+
+    const timeSyncRequest = {
+      type: 'time_sync_request',
+      timestamp: Date.now()
+    };
+
+    try {
+      wsRef.current.send(JSON.stringify(timeSyncRequest));
+      console.log('⏱️ 時刻同期リクエスト送信');
+    } catch (err) {
+      console.error('❌ 時刻同期リクエスト送信エラー:', err);
+    }
+  }, []);
+
+  /**
+   * 時刻同期レスポンスを送信（ホスト → 被験者）
+   */
+  const sendTimeSyncResponse = useCallback((requesterId: string, currentTime: number) => {
+    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+      console.warn('⚠️ WebSocketが接続されていません');
+      return;
+    }
+
+    const timeSyncResponse = {
+      type: 'time_sync_response',
+      requesterId,
+      currentTime,
+      timestamp: Date.now()
+    };
+
+    try {
+      wsRef.current.send(JSON.stringify(timeSyncResponse));
+      console.log('⏱️ 時刻同期レスポンス送信:', currentTime);
+    } catch (err) {
+      console.error('❌ 時刻同期レスポンス送信エラー:', err);
     }
   }, []);
 
@@ -209,9 +285,13 @@ export const useWebSocket = (userId: string, experimentGroup: ExperimentGroup = 
     error,
     sendReactionData,
     sendVideoEvent,
+    sendTimeSyncRequest,
+    sendTimeSyncResponse,
     lastResponse,
     currentEffect,
     videoSyncEvent,
-    connectionCount
+    connectionCount,
+    timeSyncRequest,
+    timeSyncResponse
   };
 };

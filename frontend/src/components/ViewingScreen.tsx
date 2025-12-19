@@ -49,8 +49,8 @@ const ViewingScreen: React.FC<ViewingScreenProps> = ({ videoId, userId }) => {
   const isHost = getIsHost();
   const isDebugMode = experimentGroup === 'debug';
 
-  // control2群かつ参加者モードの場合、動画コントロールを非表示
-  const shouldHideControls = experimentGroup === 'control2' && !isHost;
+  // experiment群かつ参加者モードの場合、動画コントロールを非表示
+  const shouldHideControls = experimentGroup === 'experiment' && !isHost;
   
   // 最新のstatesとeventsを保持するref
   const statesRef = useRef<ReactionStates>({
@@ -79,7 +79,7 @@ const ViewingScreen: React.FC<ViewingScreenProps> = ({ videoId, userId }) => {
     startAudio,
     stopAudio
   } = useAudioDetection();
-  const { isConnected: wsConnected, error: wsError, sendReactionData, sendVideoEvent, currentEffect, videoSyncEvent } = useWebSocket(userId, experimentGroup);
+  const { isConnected: wsConnected, error: wsError, sendReactionData, sendVideoEvent, currentEffect, videoSyncEvent, connectionCount } = useWebSocket(userId, experimentGroup, isHost);
 
   // エフェクトレンダラー
   useEffectRenderer({ canvasRef, currentEffect });
@@ -229,8 +229,8 @@ const ViewingScreen: React.FC<ViewingScreenProps> = ({ videoId, userId }) => {
     console.log('Player State Changed:', event.data);
     // -1: 未開始, 0: 終了, 1: 再生中, 2: 一時停止, 3: バッファリング中, 5: 頭出し済み
 
-    // control2群のホストの場合、再生/一時停止をWebSocketで同期
-    if (experimentGroup === 'control2' && isHost && playerRef.current) {
+    // experiment群のホストの場合、再生/一時停止をWebSocketで同期
+    if (experimentGroup === 'experiment' && isHost && playerRef.current) {
       const currentTime = playerRef.current.getCurrentTime();
 
       if (event.data === 1) {
@@ -244,11 +244,11 @@ const ViewingScreen: React.FC<ViewingScreenProps> = ({ videoId, userId }) => {
   };
 
   /**
-   * 動画シーク時の処理（control2群のホストのみ）
+   * 動画シーク時の処理（experiment群のホストのみ）
    */
   const lastSeekTimeRef = useRef<number>(0);
   useEffect(() => {
-    if (experimentGroup !== 'control2' || !isHost || !playerRef.current) {
+    if (experimentGroup !== 'experiment' || !isHost || !playerRef.current) {
       return;
     }
 
@@ -271,10 +271,10 @@ const ViewingScreen: React.FC<ViewingScreenProps> = ({ videoId, userId }) => {
   }, [experimentGroup, isHost, sendVideoEvent]);
 
   /**
-   * 動画同期イベントを受信した時の処理（control2群の参加者のみ）
+   * 動画同期イベントを受信した時の処理（experiment群の参加者のみ）
    */
   useEffect(() => {
-    if (experimentGroup !== 'control2' || isHost || !videoSyncEvent || !playerRef.current) {
+    if (experimentGroup !== 'experiment' || isHost || !videoSyncEvent || !playerRef.current) {
       return;
     }
 
@@ -301,10 +301,10 @@ const ViewingScreen: React.FC<ViewingScreenProps> = ({ videoId, userId }) => {
     width: '100%',
     playerVars: {
       autoplay: 0,
-      controls: shouldHideControls ? 0 : 1, // control2の参加者は非表示
+      controls: shouldHideControls ? 0 : 1, // experiment群の参加者は非表示
       modestbranding: 1,
       rel: 0,
-      disablekb: shouldHideControls ? 1 : 0 // control2の参加者はキーボード操作も無効化
+      disablekb: shouldHideControls ? 1 : 0 // experiment群の参加者はキーボード操作も無効化
     },
   };
 
@@ -385,19 +385,24 @@ const ViewingScreen: React.FC<ViewingScreenProps> = ({ videoId, userId }) => {
             onStateChange={onPlayerStateChange}
             style={styles.player}
           />
-          {/* control2群の参加者モード表示 */}
-          {experimentGroup === 'control2' && !isHost && isSystemReady && (
+          {/* experiment群の参加者モード表示 */}
+          {experimentGroup === 'experiment' && !isHost && isSystemReady && (
             <div style={styles.participantBadge}>
               <span style={styles.participantText}>
                 ⏺️ 同期モード | ホストが動画を操作中
               </span>
             </div>
           )}
-          {/* control2群のホストモード表示 */}
-          {experimentGroup === 'control2' && isHost && isSystemReady && (
+          {/* experiment群のホストモード表示 */}
+          {experimentGroup === 'experiment' && isHost && isSystemReady && (
             <div style={styles.hostBadge}>
               <span style={styles.hostText}>
                 🎛️ ホストモード | 全員の動画を操作中
+                {connectionCount && (
+                  <span style={styles.connectionCountText}>
+                    {' '}| 👥 {connectionCount.count}人接続中
+                  </span>
+                )}
               </span>
             </div>
           )}
@@ -755,6 +760,11 @@ const styles: { [key: string]: React.CSSProperties } = {
     color: 'white',
     fontSize: '14px',
     fontWeight: 'bold'
+  },
+  connectionCountText: {
+    color: 'rgba(255, 255, 255, 0.9)',
+    fontSize: '14px',
+    fontWeight: 'normal'
   }
 };
 

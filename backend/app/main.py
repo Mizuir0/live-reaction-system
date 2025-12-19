@@ -318,15 +318,18 @@ class ConnectionManager:
     def __init__(self):
         self.active_connections: Dict[str, WebSocket] = {}
         self.user_groups: Dict[str, str] = {}  # ユーザーごとの実験グループ
+        self.user_is_host: Dict[str, bool] = {}  # ユーザーがホストかどうか
         self.aggregation_engine = AggregationEngine()
         self.aggregation_task = None
         self.random_effect_task = None
         self.last_random_effect_time = time.time()
 
-    async def connect(self, websocket: WebSocket, user_id: str, experiment_group: str = 'control2'):
+    async def connect(self, websocket: WebSocket, user_id: str, experiment_group: str = 'control2', is_host: bool = False):
         self.active_connections[user_id] = websocket
         self.user_groups[user_id] = experiment_group
-        print(f"✅ クライアント接続: {user_id} (group: {experiment_group}, 合計: {len(self.active_connections)})")
+        self.user_is_host[user_id] = is_host
+        host_label = " (HOST)" if is_host else ""
+        print(f"✅ クライアント接続: {user_id}{host_label} (group: {experiment_group}, 合計: {len(self.active_connections)})")
         
         # 集約タスクを開始（まだ開始していない場合）
         if self.aggregation_task is None:
@@ -338,6 +341,8 @@ class ConnectionManager:
             del self.active_connections[user_id]
         if user_id in self.user_groups:
             del self.user_groups[user_id]
+        if user_id in self.user_is_host:
+            del self.user_is_host[user_id]
         print(f"❌ クライアント切断: {user_id} (合計: {len(self.active_connections)})")
     
     async def send_personal_message(self, message: dict, user_id: str):
@@ -470,6 +475,22 @@ class ConnectionManager:
                 # ========================
                 # 何も送信しない
 
+                # ========================
+                # ホストに接続人数を送信
+                # ========================
+                for user_id, is_host in self.user_is_host.items():
+                    if is_host:
+                        # グループ別の接続人数を計算
+                        group = self.user_groups.get(user_id, 'control2')
+                        group_count = sum(1 for uid, grp in self.user_groups.items() if grp == group and not self.user_is_host.get(uid, False))
+
+                        await self.send_personal_message({
+                            "type": "connection_count",
+                            "count": group_count,
+                            "total": len(self.active_connections) - sum(1 for is_h in self.user_is_host.values() if is_h),
+                            "group": group
+                        }, user_id)
+
             except Exception as e:
                 print(f"❌ 集約ループエラー: {e}")
                 import traceback
@@ -508,11 +529,12 @@ async def websocket_endpoint(websocket: WebSocket):
         await websocket.accept()
         print("🔌 WebSocket接続待機中...")
 
-        # 最初のメッセージでuser_idとexperiment_groupを取得
+        # 最初のメッセージでuser_id、experimentGroup、isHostを取得
         first_message = await websocket.receive_text()
         data = json.loads(first_message)
         user_id = data.get("userId")
         experiment_group = data.get("experimentGroup", "control2")
+        is_host = data.get("isHost", False)
 
         # グループ名の検証（debugは実験群と同じ動作）
         if experiment_group not in ['experiment', 'control1', 'control2', 'debug']:
@@ -524,7 +546,7 @@ async def websocket_endpoint(websocket: WebSocket):
             return
 
         # 接続を管理リストに追加
-        await manager.connect(websocket, user_id, experiment_group)
+        await manager.connect(websocket, user_id, experiment_group, is_host)
 
         # ユーザーをDBに登録（存在しない場合）
         ensure_user_exists(user_id, experiment_group)
@@ -547,25 +569,27 @@ async def websocket_endpoint(websocket: WebSocket):
             message_type = data.get('type')
 
             # ========================
-            # 動画同期イベント（control2群のみ）
+            # 動画同期イベント（experiment群のみ）
             # ========================
             if message_type in ['video_play', 'video_pause', 'video_seek']:
-                # ホストからの動画操作をcontrol2群全体にブロードキャスト
-                if experiment_group == 'control2':
+                # ホストからの動画操作をexperiment群全体にブロードキャスト
+                if experiment_group == 'experiment':
                     print(f"🎬 動画同期イベント受信 ({user_id}): {message_type}")
-                    # control2群の他のメンバーにブロードキャスト
+                    # experiment群の他のメンバーにブロードキャスト
                     await manager.broadcast_to_group({
                         "type": message_type,
                         "currentTime": data.get('currentTime', 0),
                         "timestamp": data.get('timestamp', int(time.time() * 1000))
-                    }, 'control2')
+                    }, 'experiment')
                 continue
 
             # ========================
             # リアクションデータの処理
             # ========================
             # 受信データをログ出力（簡略版）
-            print(f"📥 データ受信 ({user_id}): states={data.get('states', {})}, events={data.get('events', {})}")
+            is_host_user = manager.user_is_host.get(user_id, False)
+            host_label = " (HOST)" if is_host_user else ""
+            print(f"📥 データ受信 ({user_id}{host_label}): states={data.get('states', {})}, events={data.get('events', {})}")
 
             # データをDBに記録
             try:
@@ -573,8 +597,11 @@ async def websocket_endpoint(websocket: WebSocket):
             except Exception as e:
                 print(f"⚠️ DB記録エラー ({user_id}): {e}")
 
-            # データを集約エンジンに登録
-            manager.update_reaction_data(user_id, data)
+            # ホストのリアクションは集約エンジンに登録しない
+            if not is_host_user:
+                manager.update_reaction_data(user_id, data)
+            else:
+                print(f"  ⏭️ ホストのリアクションは集約から除外")
 
             # 受信確認（デバッグ用、本番では削除可）
             await manager.send_personal_message({

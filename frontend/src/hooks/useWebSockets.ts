@@ -10,6 +10,12 @@ interface VideoSyncEvent {
   timestamp: number;
 }
 
+interface ConnectionCount {
+  count: number;
+  total: number;
+  group: string;
+}
+
 interface UseWebSocketReturn {
   isConnected: boolean;
   error: string | null;
@@ -18,19 +24,22 @@ interface UseWebSocketReturn {
   lastResponse: any;
   currentEffect: EffectInstruction | null;
   videoSyncEvent: VideoSyncEvent | null;
+  connectionCount: ConnectionCount | null;
 }
 
 /**
  * WebSocket接続を管理するカスタムフック
  * @param userId ユーザーID
  * @param experimentGroup 実験グループ ('experiment' | 'control1' | 'control2')
+ * @param isHost ホストかどうか
  */
-export const useWebSocket = (userId: string, experimentGroup: ExperimentGroup = 'control2'): UseWebSocketReturn => {
+export const useWebSocket = (userId: string, experimentGroup: ExperimentGroup = 'control2', isHost: boolean = false): UseWebSocketReturn => {
   const [isConnected, setIsConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastResponse, setLastResponse] = useState<any>(null);
   const [currentEffect, setCurrentEffect] = useState<EffectInstruction | null>(null);
   const [videoSyncEvent, setVideoSyncEvent] = useState<VideoSyncEvent | null>(null);
+  const [connectionCount, setConnectionCount] = useState<ConnectionCount | null>(null);
 
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<number | null>(null);
@@ -59,9 +68,9 @@ export const useWebSocket = (userId: string, experimentGroup: ExperimentGroup = 
         setError(null);
         reconnectAttempts.current = 0;
 
-        // 最初のメッセージでuserIdとexperimentGroupを送信
-        ws.send(JSON.stringify({ userId, experimentGroup }));
-        console.log(`📋 実験グループ: ${experimentGroup}`);
+        // 最初のメッセージでuserId、experimentGroup、isHostを送信
+        ws.send(JSON.stringify({ userId, experimentGroup, isHost }));
+        console.log(`📋 実験グループ: ${experimentGroup}${isHost ? ' (HOST)' : ''}`);
       };
 
       ws.onmessage = (event) => {
@@ -88,6 +97,13 @@ export const useWebSocket = (userId: string, experimentGroup: ExperimentGroup = 
               type: data.type,
               currentTime: data.currentTime,
               timestamp: data.timestamp
+            });
+          } else if (data.type === 'connection_count') {
+            // 接続人数を受信
+            setConnectionCount({
+              count: data.count,
+              total: data.total,
+              group: data.group
             });
           }
         } catch (err) {
@@ -122,7 +138,7 @@ export const useWebSocket = (userId: string, experimentGroup: ExperimentGroup = 
       console.error('❌ WebSocket接続エラー:', err);
       setError('WebSocket接続に失敗しました');
     }
-  }, [userId, experimentGroup]);
+  }, [userId, experimentGroup, isHost]);
 
   /**
    * リアクションデータを送信
@@ -195,6 +211,7 @@ export const useWebSocket = (userId: string, experimentGroup: ExperimentGroup = 
     sendVideoEvent,
     lastResponse,
     currentEffect,
-    videoSyncEvent
+    videoSyncEvent,
+    connectionCount
   };
 };

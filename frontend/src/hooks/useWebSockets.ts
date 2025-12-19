@@ -76,6 +76,12 @@ export const useWebSocket = (userId: string, experimentGroup: ExperimentGroup = 
    * WebSocket接続を確立
    */
   const connect = useCallback(() => {
+    // userIdが空の場合は接続をスキップ
+    if (!userId) {
+      console.log('⏳ userId待機中... WebSocket接続を延期');
+      return;
+    }
+
     try {
       console.log('🔌 WebSocket接続を開始...');
 

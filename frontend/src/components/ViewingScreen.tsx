@@ -30,6 +30,11 @@ const ViewingScreen: React.FC<ViewingScreenProps> = ({ videoId, userId }) => {
   const [showLandmarks, setShowLandmarks] = useState(false); // ランドマーク表示
   const detectionIntervalRef = useRef<number | null>(null);
   const sendIntervalRef = useRef<number | null>(null);
+  const [sessionId] = useState<string>(() => {
+    // セッションID生成: userId_timestamp
+    return `${userId}_${Date.now()}`;
+  });
+  const sessionCreatedRef = useRef(false); // セッション作成済みフラグ
 
   // URLからグループとホスト判定を取得
   const getExperimentGroup = (): ExperimentGroup => {
@@ -87,6 +92,8 @@ const ViewingScreen: React.FC<ViewingScreenProps> = ({ videoId, userId }) => {
     sendVideoEvent,
     sendTimeSyncRequest,
     sendTimeSyncResponse,
+    sendSessionCreate,
+    sendSessionCompleted,
     currentEffect,
     videoSyncEvent,
     connectionCount,
@@ -196,7 +203,8 @@ const ViewingScreen: React.FC<ViewingScreenProps> = ({ videoId, userId }) => {
       sendReactionData({
         states: currentStates,
         events: currentEvents,
-        videoTime: videoTime
+        videoTime: videoTime,
+        sessionId: sessionId
       });
     }, 1000); // 1秒ごと
 
@@ -254,6 +262,18 @@ const ViewingScreen: React.FC<ViewingScreenProps> = ({ videoId, userId }) => {
 
     // 再生状態を更新
     setIsPlaying(event.data === 1);
+
+    // セッション作成（初回再生時のみ）
+    if (event.data === 1 && !sessionCreatedRef.current && videoId) {
+      sendSessionCreate(sessionId, videoId);
+      sessionCreatedRef.current = true;
+    }
+
+    // セッション完了（動画終了時）
+    if (event.data === 0) {
+      console.log('動画が終了しました');
+      sendSessionCompleted(sessionId);
+    }
 
     // experiment群のホストの場合、再生/一時停止をWebSocketで同期
     if (experimentGroup === 'experiment' && isHost && playerRef.current) {

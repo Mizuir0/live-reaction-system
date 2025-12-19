@@ -27,6 +27,7 @@ export interface ReactionData {
   states: ReactionStates;
   events: ReactionEvents;
   videoTime?: number; // 動画の現在時刻（秒）
+  sessionId?: string; // セッションID
 }
 
 // デバッグ用の検出情報

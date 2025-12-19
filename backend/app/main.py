@@ -48,6 +48,33 @@ def ensure_user_exists(user_id: str, experiment_group: str = 'control2'):
             conn.commit()
             print(f"✅ ユーザーのグループを更新: {user_id} (group: {experiment_group})")
 
+def create_session(session_id: str, user_id: str, video_id: str, experiment_group: str):
+    """新しいセッションをsessionsテーブルに作成"""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        started_at = int(time.time() * 1000)
+
+        cursor.execute("""
+            INSERT INTO sessions (session_id, user_id, video_id, experiment_group, started_at, is_completed)
+            VALUES (%s, %s, %s, %s, %s, %s)
+        """, (session_id, user_id, video_id, experiment_group, started_at, False))
+        conn.commit()
+        print(f"✅ セッション作成: {session_id} (user: {user_id}, video: {video_id})")
+
+def complete_session(session_id: str):
+    """セッションを完了としてマーク"""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        completed_at = int(time.time() * 1000)
+
+        cursor.execute("""
+            UPDATE sessions
+            SET completed_at = %s, is_completed = %s
+            WHERE session_id = %s
+        """, (completed_at, True, session_id))
+        conn.commit()
+        print(f"✅ セッション完了: {session_id}")
+
 def log_reaction(user_id: str, data: dict):
     """リアクションデータをreactions_logに記録"""
     with get_db_connection() as conn:
@@ -57,14 +84,16 @@ def log_reaction(user_id: str, data: dict):
         states = data.get('states', {})
         events = data.get('events', {})
         video_time = data.get('videoTime')  # 動画の現在時刻を取得
+        session_id = data.get('sessionId')  # セッションIDを取得
 
         cursor.execute("""
             INSERT INTO reactions_log (
-                user_id, timestamp, video_time,
+                session_id, user_id, timestamp, video_time,
                 is_smiling, is_surprised, is_concentrating, is_hand_up,
                 nod_count, sway_vertical_count, cheer_count, clap_count
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """, (
+            session_id,
             user_id,
             timestamp,
             video_time,
@@ -86,12 +115,14 @@ def log_effect(effect_data: dict):
 
         timestamp = effect_data.get('timestamp', int(time.time() * 1000))
         video_time = effect_data.get('videoTime')  # 動画の現在時刻を取得
+        session_id = effect_data.get('sessionId')  # セッションIDを取得
 
         cursor.execute("""
             INSERT INTO effects_log (
-                timestamp, video_time, effect_type, intensity, duration_ms
-            ) VALUES (%s, %s, %s, %s, %s)
+                session_id, timestamp, video_time, effect_type, intensity, duration_ms
+            ) VALUES (%s, %s, %s, %s, %s, %s)
         """, (
+            session_id,
             timestamp,
             video_time,
             effect_data.get('effectType', ''),
@@ -580,6 +611,41 @@ async def websocket_endpoint(websocket: WebSocket):
             message_type = data.get('type')
 
             # ========================
+            # セッション作成イベント
+            # ========================
+            if message_type == 'session_create':
+                session_id = data.get('sessionId')
+                video_id = data.get('videoId', '')
+                if session_id:
+                    try:
+                        create_session(session_id, user_id, video_id, experiment_group)
+                        await websocket.send_json({
+                            "type": "session_created",
+                            "sessionId": session_id,
+                            "timestamp": int(time.time() * 1000)
+                        })
+                    except Exception as e:
+                        print(f"⚠️ セッション作成エラー: {e}")
+                continue
+
+            # ========================
+            # セッション完了イベント
+            # ========================
+            if message_type == 'session_completed':
+                session_id = data.get('sessionId')
+                if session_id:
+                    try:
+                        complete_session(session_id)
+                        await websocket.send_json({
+                            "type": "session_completion_confirmed",
+                            "sessionId": session_id,
+                            "timestamp": int(time.time() * 1000)
+                        })
+                    except Exception as e:
+                        print(f"⚠️ セッション完了エラー: {e}")
+                continue
+
+            # ========================
             # 動画URL選択イベント（experiment群のホストのみ）
             # ========================
             if message_type == 'video_url_selected':
@@ -760,6 +826,201 @@ async def get_database_stats():
             "error": str(e),
             "timestamp": datetime.now().isoformat()
         }
+
+# ========================
+# データエクスポートAPI
+# ========================
+
+@app.get("/admin/export/session/{session_id}")
+async def export_session(session_id: str):
+    """特定のセッションデータをエクスポート"""
+    try:
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+
+            # セッション情報を取得
+            cursor.execute("""
+                SELECT session_id, user_id, video_id, experiment_group,
+                       started_at, completed_at, is_completed
+                FROM sessions
+                WHERE session_id = %s
+            """, (session_id,))
+            session_row = cursor.fetchone()
+
+            if not session_row:
+                return {"error": "Session not found", "session_id": session_id}
+
+            # セッション情報を整形
+            session_info = {
+                "session_id": session_row[0],
+                "user_id": session_row[1],
+                "video_id": session_row[2],
+                "experiment_group": session_row[3],
+                "started_at": session_row[4],
+                "completed_at": session_row[5],
+                "is_completed": bool(session_row[6]),
+                "duration_ms": session_row[5] - session_row[4] if session_row[5] else None
+            }
+
+            # リアクションデータを取得
+            cursor.execute("""
+                SELECT timestamp, video_time, is_smiling, is_surprised, is_concentrating,
+                       is_hand_up, nod_count, sway_vertical_count, cheer_count, clap_count
+                FROM reactions_log
+                WHERE session_id = %s
+                ORDER BY timestamp
+            """, (session_id,))
+            reactions_rows = cursor.fetchall()
+
+            reactions = []
+            for row in reactions_rows:
+                reactions.append({
+                    "timestamp": row[0],
+                    "video_time": row[1],
+                    "is_smiling": bool(row[2]) if row[2] is not None else None,
+                    "is_surprised": bool(row[3]) if row[3] is not None else None,
+                    "is_concentrating": bool(row[4]) if row[4] is not None else None,
+                    "is_hand_up": bool(row[5]) if row[5] is not None else None,
+                    "nod_count": row[6],
+                    "sway_vertical_count": row[7],
+                    "cheer_count": row[8],
+                    "clap_count": row[9]
+                })
+
+            # エフェクトデータを取得
+            cursor.execute("""
+                SELECT timestamp, video_time, effect_type, intensity, duration_ms
+                FROM effects_log
+                WHERE session_id = %s
+                ORDER BY timestamp
+            """, (session_id,))
+            effects_rows = cursor.fetchall()
+
+            effects = []
+            for row in effects_rows:
+                effects.append({
+                    "timestamp": row[0],
+                    "video_time": row[1],
+                    "effect_type": row[2],
+                    "intensity": row[3],
+                    "duration_ms": row[4]
+                })
+
+            return {
+                "session": session_info,
+                "reactions": reactions,
+                "effects": effects,
+                "stats": {
+                    "total_reactions": len(reactions),
+                    "total_effects": len(effects)
+                }
+            }
+
+    except Exception as e:
+        return {"error": str(e), "session_id": session_id}
+
+
+@app.get("/admin/export/completed")
+async def export_completed_sessions(group: str = None, date: str = None):
+    """完了したセッションの一覧を取得
+
+    Args:
+        group: 実験グループでフィルタ (experiment, control1, control2)
+        date: 日付でフィルタ (YYYY-MM-DD形式)
+    """
+    try:
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+
+            # クエリを構築
+            query = """
+                SELECT session_id, user_id, video_id, experiment_group,
+                       started_at, completed_at, is_completed
+                FROM sessions
+                WHERE is_completed = %s
+            """
+            params = [True]
+
+            if group:
+                query += " AND experiment_group = %s"
+                params.append(group)
+
+            if date:
+                # 日付範囲でフィルタ（その日の0時から24時まで）
+                from datetime import datetime
+                date_obj = datetime.strptime(date, "%Y-%m-%d")
+                start_ms = int(date_obj.timestamp() * 1000)
+                end_ms = start_ms + (24 * 60 * 60 * 1000)
+                query += " AND started_at >= %s AND started_at < %s"
+                params.extend([start_ms, end_ms])
+
+            query += " ORDER BY started_at DESC"
+
+            cursor.execute(query, tuple(params))
+            sessions_rows = cursor.fetchall()
+
+            sessions = []
+            for row in sessions_rows:
+                sessions.append({
+                    "session_id": row[0],
+                    "user_id": row[1],
+                    "video_id": row[2],
+                    "experiment_group": row[3],
+                    "started_at": row[4],
+                    "completed_at": row[5],
+                    "is_completed": bool(row[6]),
+                    "duration_ms": row[5] - row[4] if row[5] else None
+                })
+
+            return {
+                "sessions": sessions,
+                "total": len(sessions),
+                "filters": {
+                    "group": group,
+                    "date": date
+                }
+            }
+
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@app.get("/admin/sessions")
+async def get_all_sessions():
+    """全セッションの一覧を取得（管理用）"""
+    try:
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+
+            cursor.execute("""
+                SELECT session_id, user_id, video_id, experiment_group,
+                       started_at, completed_at, is_completed
+                FROM sessions
+                ORDER BY started_at DESC
+                LIMIT 100
+            """)
+            sessions_rows = cursor.fetchall()
+
+            sessions = []
+            for row in sessions_rows:
+                sessions.append({
+                    "session_id": row[0],
+                    "user_id": row[1],
+                    "video_id": row[2],
+                    "experiment_group": row[3],
+                    "started_at": row[4],
+                    "completed_at": row[5],
+                    "is_completed": bool(row[6]),
+                    "duration_ms": row[5] - row[4] if row[5] else None
+                })
+
+            return {
+                "sessions": sessions,
+                "total": len(sessions)
+            }
+
+    except Exception as e:
+        return {"error": str(e)}
 
 if __name__ == "__main__":
     import uvicorn

@@ -39,6 +39,8 @@ interface UseWebSocketReturn {
   sendTimeSyncRequest: () => void;
   sendTimeSyncResponse: (requesterId: string, currentTime: number) => void;
   sendVideoUrlSelected: (videoId: string) => void;
+  sendSessionCreate: (sessionId: string, videoId: string) => void;
+  sendSessionCompleted: (sessionId: string) => void;
   lastResponse: any;
   currentEffect: EffectInstruction | null;
   videoSyncEvent: VideoSyncEvent | null;
@@ -307,6 +309,53 @@ export const useWebSocket = (userId: string, experimentGroup: ExperimentGroup = 
   }, []);
 
   /**
+   * セッション作成イベントを送信
+   */
+  const sendSessionCreate = useCallback((sessionId: string, videoId: string) => {
+    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+      console.warn('⚠️ WebSocketが接続されていません');
+      return;
+    }
+
+    const sessionCreateEvent = {
+      type: 'session_create',
+      sessionId,
+      videoId,
+      timestamp: Date.now()
+    };
+
+    try {
+      wsRef.current.send(JSON.stringify(sessionCreateEvent));
+      console.log('🆕 セッション作成イベント送信:', sessionId);
+    } catch (err) {
+      console.error('❌ セッション作成イベント送信エラー:', err);
+    }
+  }, []);
+
+  /**
+   * セッション完了イベントを送信
+   */
+  const sendSessionCompleted = useCallback((sessionId: string) => {
+    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+      console.warn('⚠️ WebSocketが接続されていません');
+      return;
+    }
+
+    const sessionCompletedEvent = {
+      type: 'session_completed',
+      sessionId,
+      timestamp: Date.now()
+    };
+
+    try {
+      wsRef.current.send(JSON.stringify(sessionCompletedEvent));
+      console.log('✅ セッション完了イベント送信:', sessionId);
+    } catch (err) {
+      console.error('❌ セッション完了イベント送信エラー:', err);
+    }
+  }, []);
+
+  /**
    * 初回接続
    */
   useEffect(() => {
@@ -332,6 +381,8 @@ export const useWebSocket = (userId: string, experimentGroup: ExperimentGroup = 
     sendTimeSyncRequest,
     sendTimeSyncResponse,
     sendVideoUrlSelected,
+    sendSessionCreate,
+    sendSessionCompleted,
     lastResponse,
     currentEffect,
     videoSyncEvent,

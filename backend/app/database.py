@@ -108,11 +108,41 @@ def init_database():
             """)
         print("✅ usersテーブルを作成しました")
 
+        # sessionsテーブル
+        if DB_TYPE == "postgresql":
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS sessions (
+                    session_id TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL,
+                    video_id TEXT NOT NULL,
+                    experiment_group TEXT NOT NULL,
+                    started_at BIGINT NOT NULL,
+                    completed_at BIGINT,
+                    is_completed BOOLEAN DEFAULT FALSE,
+                    FOREIGN KEY (user_id) REFERENCES users(id)
+                )
+            """)
+        else:
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS sessions (
+                    session_id TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL,
+                    video_id TEXT NOT NULL,
+                    experiment_group TEXT NOT NULL,
+                    started_at INTEGER NOT NULL,
+                    completed_at INTEGER,
+                    is_completed BOOLEAN DEFAULT 0,
+                    FOREIGN KEY (user_id) REFERENCES users(id)
+                )
+            """)
+        print("✅ sessionsテーブルを作成しました")
+
         # reactions_logテーブル
         if DB_TYPE == "postgresql":
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS reactions_log (
                     id SERIAL PRIMARY KEY,
+                    session_id TEXT,
                     user_id TEXT NOT NULL,
                     timestamp BIGINT NOT NULL,
                     video_time REAL,
@@ -124,13 +154,15 @@ def init_database():
                     sway_vertical_count INTEGER DEFAULT 0,
                     cheer_count INTEGER DEFAULT 0,
                     clap_count INTEGER DEFAULT 0,
-                    FOREIGN KEY (user_id) REFERENCES users(id)
+                    FOREIGN KEY (user_id) REFERENCES users(id),
+                    FOREIGN KEY (session_id) REFERENCES sessions(session_id)
                 )
             """)
         else:
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS reactions_log (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    session_id TEXT,
                     user_id TEXT NOT NULL,
                     timestamp INTEGER NOT NULL,
                     video_time REAL,
@@ -142,7 +174,8 @@ def init_database():
                     sway_vertical_count INTEGER DEFAULT 0,
                     cheer_count INTEGER DEFAULT 0,
                     clap_count INTEGER DEFAULT 0,
-                    FOREIGN KEY (user_id) REFERENCES users(id)
+                    FOREIGN KEY (user_id) REFERENCES users(id),
+                    FOREIGN KEY (session_id) REFERENCES sessions(session_id)
                 )
             """)
         print("✅ reactions_logテーブルを作成しました")
@@ -152,22 +185,26 @@ def init_database():
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS effects_log (
                     id SERIAL PRIMARY KEY,
+                    session_id TEXT,
                     timestamp BIGINT NOT NULL,
                     video_time REAL,
                     effect_type TEXT NOT NULL,
                     intensity REAL NOT NULL,
-                    duration_ms INTEGER NOT NULL
+                    duration_ms INTEGER NOT NULL,
+                    FOREIGN KEY (session_id) REFERENCES sessions(session_id)
                 )
             """)
         else:
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS effects_log (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    session_id TEXT,
                     timestamp INTEGER NOT NULL,
                     video_time REAL,
                     effect_type TEXT NOT NULL,
                     intensity REAL NOT NULL,
-                    duration_ms INTEGER NOT NULL
+                    duration_ms INTEGER NOT NULL,
+                    FOREIGN KEY (session_id) REFERENCES sessions(session_id)
                 )
             """)
         print("✅ effects_logテーブルを作成しました")
@@ -218,6 +255,52 @@ def init_database():
                 print("✅ effects_logテーブルにvideo_timeカラムを追加しました")
         except Exception as e:
             print(f"ℹ️ effects_logマイグレーション: {e}")
+
+        # reactions_logテーブルにsession_idカラムを追加（マイグレーション）
+        try:
+            if DB_TYPE == "postgresql":
+                cursor.execute("""
+                    SELECT column_name FROM information_schema.columns
+                    WHERE table_name='reactions_log' AND column_name='session_id'
+                """)
+            else:
+                cursor.execute("PRAGMA table_info(reactions_log)")
+
+            columns = cursor.fetchall()
+            has_session_id = False
+            if DB_TYPE == "postgresql":
+                has_session_id = len(columns) > 0
+            else:
+                has_session_id = any(col[1] == 'session_id' for col in columns)
+
+            if not has_session_id:
+                cursor.execute("ALTER TABLE reactions_log ADD COLUMN session_id TEXT")
+                print("✅ reactions_logテーブルにsession_idカラムを追加しました")
+        except Exception as e:
+            print(f"ℹ️ reactions_log session_idマイグレーション: {e}")
+
+        # effects_logテーブルにsession_idカラムを追加（マイグレーション）
+        try:
+            if DB_TYPE == "postgresql":
+                cursor.execute("""
+                    SELECT column_name FROM information_schema.columns
+                    WHERE table_name='effects_log' AND column_name='session_id'
+                """)
+            else:
+                cursor.execute("PRAGMA table_info(effects_log)")
+
+            columns = cursor.fetchall()
+            has_session_id = False
+            if DB_TYPE == "postgresql":
+                has_session_id = len(columns) > 0
+            else:
+                has_session_id = any(col[1] == 'session_id' for col in columns)
+
+            if not has_session_id:
+                cursor.execute("ALTER TABLE effects_log ADD COLUMN session_id TEXT")
+                print("✅ effects_logテーブルにsession_idカラムを追加しました")
+        except Exception as e:
+            print(f"ℹ️ effects_log session_idマイグレーション: {e}")
 
         conn.commit()
 

@@ -31,6 +31,7 @@ function App() {
   const [userId, setUserId] = useState<string>('');
   const [experimentGroup] = useState<ExperimentGroup>(initialGroup);
   const [isHost] = useState<boolean>(initialIsHost);
+  const [isReady, setIsReady] = useState<boolean>(false); // 準備完了フラグ
 
   console.log(`実験グループ: ${experimentGroup}, ホスト: ${isHost}`);
 
@@ -53,9 +54,24 @@ function App() {
     if (experimentGroup === 'experiment' && !isHost && videoUrlSelectedEvent) {
       console.log('📺 ホストが選択した動画を受信:', videoUrlSelectedEvent.videoId);
       setVideoId(videoUrlSelectedEvent.videoId);
+
+      // 準備完了している場合のみ画面遷移
+      if (isReady) {
+        console.log('✅ 準備完了済み - 視聴画面に遷移');
+        setCurrentScreen('viewing');
+      } else {
+        console.log('⏳ 準備未完了 - 待機画面を維持');
+      }
+    }
+  }, [videoUrlSelectedEvent, experimentGroup, isHost, isReady]);
+
+  // 準備完了後にvideoIdが設定されている場合は画面遷移
+  useEffect(() => {
+    if (experimentGroup === 'experiment' && !isHost && isReady && videoId && currentScreen === 'waiting') {
+      console.log('✅ 準備完了 - 視聴画面に遷移');
       setCurrentScreen('viewing');
     }
-  }, [videoUrlSelectedEvent, experimentGroup, isHost]);
+  }, [isReady, videoId, currentScreen, experimentGroup, isHost]);
 
   // experiment群の参加者：初期画面を待機画面に設定
   useEffect(() => {
@@ -115,16 +131,34 @@ function App() {
             <div style={styles.readyButtonContainer}>
               <button
                 onClick={() => {
-                  console.log('✅ 準備完了ボタンがクリックされました');
-                  // ユーザー操作を記録（自動再生を許可するため）
+                  if (!isReady) {
+                    console.log('✅ 準備完了ボタンがクリックされました');
+                    setIsReady(true);
+                  }
                 }}
-                style={styles.readyButton}
+                style={{
+                  ...styles.readyButton,
+                  ...(isReady ? styles.readyButtonClicked : {})
+                }}
+                disabled={isReady}
               >
-                📺 準備完了（自動再生を許可）
+                {isReady ? '✅ 準備完了しました' : '📺 準備完了（クリックしてください）'}
               </button>
-              <p style={styles.readyButtonNote}>
-                ※ ホストが動画を開始したときに自動再生するため、このボタンをクリックしてください
-              </p>
+              {!isReady && (
+                <p style={styles.readyButtonNote}>
+                  ※ ホストが動画を開始したときに自動再生するため、このボタンをクリックしてください
+                </p>
+              )}
+              {isReady && videoId && (
+                <p style={styles.readyButtonSuccess}>
+                  ホストが動画を選択しました。まもなく視聴画面に移動します...
+                </p>
+              )}
+              {isReady && !videoId && (
+                <p style={styles.readyButtonSuccess}>
+                  準備完了しました。ホストが動画を選択するまでお待ちください。
+                </p>
+              )}
             </div>
             <p style={styles.waitingSubText}>
               実験グループ: <strong>experiment</strong>
@@ -214,11 +248,24 @@ const styles: { [key: string]: React.CSSProperties } = {
     transition: 'all 0.3s',
     boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
   },
+  readyButtonClicked: {
+    backgroundColor: '#2196F3',
+    cursor: 'not-allowed',
+    boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+    opacity: 0.8
+  },
   readyButtonNote: {
     fontSize: '14px',
     color: '#aaa',
     marginTop: '16px',
     lineHeight: '1.5'
+  },
+  readyButtonSuccess: {
+    fontSize: '16px',
+    color: '#4CAF50',
+    marginTop: '16px',
+    lineHeight: '1.5',
+    fontWeight: 'bold'
   },
   debugButton: {
     position: 'fixed',

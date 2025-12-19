@@ -8,26 +8,31 @@ import { useWebSocket } from './hooks/useWebSockets';
 type Screen = 'initial' | 'waiting' | 'viewing';
 type ExperimentGroup = 'experiment' | 'control1' | 'control2' | 'debug';
 
+// URLパラメータを取得する関数
+const getUrlParams = () => {
+  const urlParams = new URLSearchParams(window.location.search);
+  const group = urlParams.get('group');
+  const host = urlParams.get('host') === 'true';
+
+  let experimentGroup: ExperimentGroup = 'control2';
+  if (group === 'experiment' || group === 'control1' || group === 'control2' || group === 'debug') {
+    experimentGroup = group;
+  }
+
+  return { experimentGroup, isHost: host };
+};
+
 function App() {
+  // URLパラメータを初期値として読み込む
+  const { experimentGroup: initialGroup, isHost: initialIsHost } = getUrlParams();
+
   const [currentScreen, setCurrentScreen] = useState<Screen>('initial');
   const [videoId, setVideoId] = useState<string>('');
   const [userId, setUserId] = useState<string>('');
-  const [experimentGroup, setExperimentGroup] = useState<ExperimentGroup>('control2');
-  const [isHost, setIsHost] = useState<boolean>(false);
+  const [experimentGroup] = useState<ExperimentGroup>(initialGroup);
+  const [isHost] = useState<boolean>(initialIsHost);
 
-  // URLパラメータから実験グループとホスト判定を取得
-  useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const group = urlParams.get('group');
-    const host = urlParams.get('host') === 'true';
-
-    if (group === 'experiment' || group === 'control1' || group === 'control2' || group === 'debug') {
-      setExperimentGroup(group);
-    }
-    setIsHost(host);
-
-    console.log(`実験グループ: ${group || 'control2'}, ホスト: ${host}`);
-  }, []);
+  console.log(`実験グループ: ${experimentGroup}, ホスト: ${isHost}`);
 
   useEffect(() => {
     // アプリ起動時に userId を取得または生成
@@ -55,9 +60,10 @@ function App() {
   // experiment群の参加者：初期画面を待機画面に設定
   useEffect(() => {
     if (experimentGroup === 'experiment' && !isHost && currentScreen === 'initial') {
+      console.log('⏳ 待機画面に遷移');
       setCurrentScreen('waiting');
     }
-  }, [experimentGroup, isHost, currentScreen]);
+  }, [experimentGroup, isHost]);
 
   /**
    * 視聴開始ハンドラ

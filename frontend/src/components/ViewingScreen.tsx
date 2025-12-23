@@ -94,6 +94,7 @@ const ViewingScreen: React.FC<ViewingScreenProps> = ({ videoId, userId }) => {
     sendTimeSyncResponse,
     sendSessionCreate,
     sendSessionCompleted,
+    sendManualEffect,
     currentEffect,
     videoSyncEvent,
     connectionCount,
@@ -629,6 +630,69 @@ const ViewingScreen: React.FC<ViewingScreenProps> = ({ videoId, userId }) => {
           </p>
         </div>
       )}
+
+      {/* 手動エフェクトボタン（debugモードのみ） */}
+      {isDebugMode && (
+        <div style={styles.effectButtons}>
+          <h3 style={styles.effectButtonsTitle}>🎨 手動エフェクト発動</h3>
+          <div style={styles.effectButtonsGrid}>
+            <button
+              onClick={() => sendManualEffect('sparkle', 1.0, 2000, sessionId, playerRef.current?.getCurrentTime())}
+              style={styles.effectButton}
+            >
+              ✨ Sparkle
+            </button>
+            <button
+              onClick={() => sendManualEffect('wave', 1.0, 2000, sessionId, playerRef.current?.getCurrentTime())}
+              style={styles.effectButton}
+            >
+              🌊 Wave
+            </button>
+            <button
+              onClick={() => sendManualEffect('clapping_icons', 1.0, 2000, sessionId, playerRef.current?.getCurrentTime())}
+              style={styles.effectButton}
+            >
+              👏 Clapping
+            </button>
+            <button
+              onClick={() => sendManualEffect('excitement', 1.0, 2000, sessionId, playerRef.current?.getCurrentTime())}
+              style={styles.effectButton}
+            >
+              🎉 Excitement
+            </button>
+            <button
+              onClick={() => sendManualEffect('bounce', 1.0, 2000, sessionId, playerRef.current?.getCurrentTime())}
+              style={styles.effectButton}
+            >
+              ⬆️ Bounce
+            </button>
+            <button
+              onClick={() => sendManualEffect('cheer', 1.0, 2000, sessionId, playerRef.current?.getCurrentTime())}
+              style={styles.effectButton}
+            >
+              🎊 Cheer
+            </button>
+            <button
+              onClick={() => sendManualEffect('shimmer', 1.0, 2000, sessionId, playerRef.current?.getCurrentTime())}
+              style={styles.effectButton}
+            >
+              💫 Shimmer
+            </button>
+            <button
+              onClick={() => sendManualEffect('focus', 1.0, 2000, sessionId, playerRef.current?.getCurrentTime())}
+              style={styles.effectButton}
+            >
+              🎯 Focus
+            </button>
+            <button
+              onClick={() => sendManualEffect('groove', 1.0, 2000, sessionId, playerRef.current?.getCurrentTime())}
+              style={styles.effectButton}
+            >
+              💃 Groove
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -747,6 +811,34 @@ const styles: { [key: string]: React.CSSProperties } = {
     fontSize: '12px',
     color: '#888',
     margin: '5px 0'
+  },
+  effectButtons: {
+    padding: '20px 30px',
+    backgroundColor: '#1a1a1a',
+    borderTop: '1px solid #444'
+  },
+  effectButtonsTitle: {
+    fontSize: '16px',
+    color: '#fff',
+    marginBottom: '15px',
+    fontWeight: 'bold'
+  },
+  effectButtonsGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))',
+    gap: '10px'
+  },
+  effectButton: {
+    padding: '12px 16px',
+    fontSize: '14px',
+    fontWeight: 'bold',
+    color: '#fff',
+    backgroundColor: '#4CAF50',
+    border: 'none',
+    borderRadius: '6px',
+    cursor: 'pointer',
+    transition: 'all 0.2s',
+    boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
   },
   loadingOverlay: {
     position: 'absolute',

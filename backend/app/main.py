@@ -646,6 +646,42 @@ async def websocket_endpoint(websocket: WebSocket):
                 continue
 
             # ========================
+            # 手動エフェクト発動（デバッグ群のみ）
+            # ========================
+            if message_type == 'manual_effect':
+                if experiment_group == 'debug':
+                    effect_type = data.get('effectType')
+                    intensity = data.get('intensity', 1.0)
+                    duration_ms = data.get('durationMs', 2000)
+
+                    print(f"🎨 手動エフェクト発動 ({user_id}): {effect_type}")
+
+                    # エフェクト指示を作成
+                    effect_instruction = {
+                        "type": "effect",
+                        "effectType": effect_type,
+                        "intensity": intensity,
+                        "durationMs": duration_ms,
+                        "timestamp": int(time.time() * 1000),
+                        "debug": {
+                            "manual_trigger": True,
+                            "triggered_by": user_id
+                        }
+                    }
+
+                    # debug群にブロードキャスト
+                    await manager.broadcast_to_group(effect_instruction, 'debug')
+
+                    # エフェクトをDBに記録
+                    try:
+                        effect_instruction['sessionId'] = data.get('sessionId')
+                        effect_instruction['videoTime'] = data.get('videoTime')
+                        log_effect(effect_instruction)
+                    except Exception as e:
+                        print(f"⚠️ エフェクトDB記録エラー: {e}")
+                continue
+
+            # ========================
             # 動画URL選択イベント（experiment群のホストのみ）
             # ========================
             if message_type == 'video_url_selected':

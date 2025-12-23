@@ -41,6 +41,7 @@ interface UseWebSocketReturn {
   sendVideoUrlSelected: (videoId: string) => void;
   sendSessionCreate: (sessionId: string, videoId: string) => void;
   sendSessionCompleted: (sessionId: string) => void;
+  sendManualEffect: (effectType: string, intensity?: number, durationMs?: number, sessionId?: string, videoTime?: number) => void;
   lastResponse: any;
   currentEffect: EffectInstruction | null;
   videoSyncEvent: VideoSyncEvent | null;
@@ -356,6 +357,39 @@ export const useWebSocket = (userId: string, experimentGroup: ExperimentGroup = 
   }, []);
 
   /**
+   * 手動エフェクト発動（デバッグ用）
+   */
+  const sendManualEffect = useCallback((
+    effectType: string,
+    intensity: number = 1.0,
+    durationMs: number = 2000,
+    sessionId?: string,
+    videoTime?: number
+  ) => {
+    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+      console.warn('⚠️ WebSocketが接続されていません');
+      return;
+    }
+
+    const manualEffectEvent = {
+      type: 'manual_effect',
+      effectType,
+      intensity,
+      durationMs,
+      sessionId,
+      videoTime,
+      timestamp: Date.now()
+    };
+
+    try {
+      wsRef.current.send(JSON.stringify(manualEffectEvent));
+      console.log('🎨 手動エフェクト送信:', effectType);
+    } catch (err) {
+      console.error('❌ 手動エフェクト送信エラー:', err);
+    }
+  }, []);
+
+  /**
    * 初回接続
    */
   useEffect(() => {
@@ -383,6 +417,7 @@ export const useWebSocket = (userId: string, experimentGroup: ExperimentGroup = 
     sendVideoUrlSelected,
     sendSessionCreate,
     sendSessionCompleted,
+    sendManualEffect,
     lastResponse,
     currentEffect,
     videoSyncEvent,

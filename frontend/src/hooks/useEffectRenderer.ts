@@ -124,11 +124,11 @@ export const useEffectRenderer = ({ canvasRef, currentEffect }: UseEffectRendere
     const waveCount = 4; // 波の本数
 
     for (let i = 0; i < waveCount; i++) {
-      // 左右に分散: 左側2本 (15%, 30%) と 右側2本 (70%, 85%)
+      // 左右に分散: 左側2本 (5%, 15%) と 右側2本 (85%, 95%)
       const isLeft = i < 2;
       const xPos = isLeft
-        ? width * (0.15 + (i % 2) * 0.15)      // 左側: 15%, 30%
-        : width * (0.70 + (i % 2) * 0.15);     // 右側: 70%, 85%
+        ? width * (0.05 + (i % 2) * 0.10)      // 左側: 5%, 15%
+        : width * (0.85 + (i % 2) * 0.10);     // 右側: 85%, 95%
       const amplitude = 40 + intensity * 60; // 波の振幅
       const frequency = 0.02; // 波の周波数
       const speed = time * 2 + i * 0.5; // 波の速度（下に流れる）
@@ -175,11 +175,11 @@ export const useEffectRenderer = ({ canvasRef, currentEffect }: UseEffectRendere
     for (let i = 0; i < particleCount; i++) {
       const offset = (i / particleCount) * height;
       const y = (offset + time * 150 + i * 30) % height;
-      // 左右に分散: 左側 (10-35%) または 右側 (65-90%)
+      // 左右に分散: 左側 (5-25%) または 右側 (75-95%)
       const isLeft = i % 2 === 0;
       const baseX = isLeft
-        ? width * (0.10 + (i % 4) * 0.0625)  // 左側: 10%, 16%, 22%, 29%, 35%
-        : width * (0.65 + (i % 4) * 0.0625); // 右側: 65%, 71%, 78%, 84%, 90%
+        ? width * (0.05 + (i % 4) * 0.05)  // 左側: 5%, 10%, 15%, 20%, 25%
+        : width * (0.75 + (i % 4) * 0.05); // 右側: 75%, 80%, 85%, 90%, 95%
       const x = baseX + Math.sin(time * 3 + i) * 25;
       const size = 6 + intensity * 10; // サイズアップ
       const alpha = 0.7 + Math.sin(time * 2 + i * 0.5) * 0.3; // 不透明度アップ

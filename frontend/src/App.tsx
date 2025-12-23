@@ -81,6 +81,14 @@ function App() {
     }
   }, [experimentGroup, isHost]);
 
+  // debugグループ：動画なしで直接視聴画面に遷移
+  useEffect(() => {
+    if (experimentGroup === 'debug' && currentScreen === 'initial') {
+      console.log('🐛 デバッグモード - 視聴画面に自動遷移（動画なし）');
+      setCurrentScreen('viewing');
+    }
+  }, [experimentGroup, currentScreen]);
+
   /**
    * 視聴開始ハンドラ
    */

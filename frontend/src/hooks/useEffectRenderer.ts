@@ -119,141 +119,127 @@ export const useEffectRenderer = ({ canvasRef, currentEffect }: UseEffectRendere
   ) => {
     const time = performance.now() / 1000;
 
-    // 位相を更新
-    wavePhaseRef.current += 0.05 * (1 + intensity);
-
     ctx.save();
 
-    // 📢絵文字を画面左右に配置（複数）
-    const megaphoneCount = Math.floor(2 + intensity * 4); // 2~6個
-    const megaphonePositions = [];
+    // 背景に薄いグラデーション
+    const bgGradient = ctx.createLinearGradient(0, 0, 0, height);
+    bgGradient.addColorStop(0, `rgba(100, 200, 255, ${0.02 * intensity})`);
+    bgGradient.addColorStop(0.5, `rgba(100, 200, 255, ${0.05 * intensity})`);
+    bgGradient.addColorStop(1, `rgba(100, 200, 255, ${0.02 * intensity})`);
+    ctx.fillStyle = bgGradient;
+    ctx.fillRect(0, 0, width, height);
 
-    for (let i = 0; i < megaphoneCount; i++) {
-      const seed = i * 345.678;
-      // 左右に分散: 左側 (0~30%) または 右側 (70~100%)
-      const isLeft = i % 2 === 0;
-      const xRatio = isLeft
-        ? Math.sin(seed) * 0.15 + 0.15  // 左側: 0~30%
-        : Math.sin(seed) * 0.15 + 0.85; // 右側: 70~100%
-      const x = xRatio * width;
-      const y = height - 60 - Math.sin(time * 2 + i) * 15;
-      const size = 35 + intensity * 25;
+    // 垂直の波を描画（Grooveの90度回転版）
+    const waveCount = 4; // 波の本数
+    const offset = Math.random() * 1000;
 
-      megaphonePositions.push({ x, y });
+    for (let i = 0; i < waveCount; i++) {
+      const xPos = width * (0.2 + i * 0.2); // 固定されたx位置（垂直線）
+      const amplitude = 40 + intensity * 60; // 波の振幅
+      const frequency = 0.02; // 波の周波数
+      const speed = time * 2 + i * 0.5; // 波の速度（下に流れる）
 
-      // 📢絵文字を描画
-      ctx.globalAlpha = 0.85 + intensity * 0.15;
-      ctx.font = `${size}px Arial`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.shadowBlur = 10;
+      // 波線を描画
+      ctx.beginPath();
+      for (let y = 0; y < height; y += 5) {
+        const x = xPos + Math.sin((y * frequency) + speed) * amplitude;
+
+        if (y === 0) {
+          ctx.moveTo(x, y);
+        } else {
+          ctx.lineTo(x, y);
+        }
+      }
+
+      // グラデーションストローク
+      const gradient = ctx.createLinearGradient(0, 0, 0, height);
+      gradient.addColorStop(0, `rgba(100, 200, 255, ${0.3 + intensity * 0.4})`);
+      gradient.addColorStop(0.5, `rgba(150, 220, 255, ${0.6 + intensity * 0.4})`);
+      gradient.addColorStop(1, `rgba(100, 200, 255, ${0.3 + intensity * 0.4})`);
+
+      ctx.strokeStyle = gradient;
+      ctx.lineWidth = 3 + intensity * 3;
+      ctx.shadowBlur = 10 + intensity * 10;
       ctx.shadowColor = 'rgba(100, 200, 255, 0.6)';
-      ctx.fillText('📢', x, y);
+      ctx.stroke();
+
+      // 2本目の薄い波線（外側の光）
+      ctx.beginPath();
+      for (let y = 0; y < height; y += 5) {
+        const x = xPos + Math.sin((y * frequency) + speed) * amplitude;
+        if (y === 0) {
+          ctx.moveTo(x, y);
+        } else {
+          ctx.lineTo(x, y);
+        }
+      }
+      ctx.strokeStyle = `rgba(150, 220, 255, ${0.2 + intensity * 0.3})`;
+      ctx.lineWidth = 6 + intensity * 6;
+      ctx.shadowBlur = 20 + intensity * 15;
+      ctx.stroke();
     }
 
     ctx.shadowBlur = 0;
-    ctx.restore();
 
-    // 各メガホンから音の波が広がる
-    ctx.save();
+    // パーティクル（上から下に流れる）
+    const particleCount = Math.floor(12 + intensity * 16);
 
-    for (const pos of megaphonePositions) {
-      const waveCount = 5;
+    for (let i = 0; i < particleCount; i++) {
+      const y = (offset + time * 150 + i * 30) % height; // y座標が時間で変化（下に流れる）
+      const x = width * (0.15 + (i % 4) * 0.25); // 固定されたx位置
+      const size = 3 + intensity * 4;
 
-      for (let i = 0; i < waveCount; i++) {
-        const wavePhase = (wavePhaseRef.current + i * 0.5) % 3;
-        const radius = wavePhase * 150 + 30;
-        const alpha = (1 - wavePhase / 3) * (0.5 + intensity * 0.3);
+      // パーティクル本体
+      ctx.globalAlpha = 0.6 + intensity * 0.4;
+      ctx.fillStyle = `rgba(100, 200, 255, ${0.8 + intensity * 0.2})`;
+      ctx.shadowBlur = 8 + intensity * 8;
+      ctx.shadowColor = 'rgba(100, 200, 255, 0.8)';
+      ctx.beginPath();
+      ctx.arc(x, y, size, 0, Math.PI * 2);
+      ctx.fill();
 
-        // 音の波の円弧（右向き）
-        ctx.globalAlpha = alpha;
-        ctx.strokeStyle = `rgba(100, 200, 255, ${0.7 + intensity * 0.3})`;
-        ctx.lineWidth = 4 + intensity * 4;
-        ctx.shadowBlur = 15;
-        ctx.shadowColor = 'rgba(100, 200, 255, 0.7)';
-
-        ctx.beginPath();
-        ctx.arc(pos.x, pos.y, radius, -Math.PI / 3, Math.PI / 3);
-        ctx.stroke();
-
-        // 二重線効果（外側の光）
-        ctx.strokeStyle = `rgba(150, 220, 255, ${0.4 + intensity * 0.2})`;
-        ctx.lineWidth = 8 + intensity * 6;
-        ctx.shadowBlur = 25;
-        ctx.beginPath();
-        ctx.arc(pos.x, pos.y, radius, -Math.PI / 3, Math.PI / 3);
-        ctx.stroke();
-      }
+      // パーティクルの尾
+      const tailGradient = ctx.createLinearGradient(x, y - 20, x, y);
+      tailGradient.addColorStop(0, 'rgba(100, 200, 255, 0)');
+      tailGradient.addColorStop(1, `rgba(100, 200, 255, ${0.4 + intensity * 0.4})`);
+      ctx.fillStyle = tailGradient;
+      ctx.fillRect(x - 1, y - 20, 2, 20);
     }
 
-    ctx.restore();
+    ctx.shadowBlur = 0;
 
-    // 音符パーティクルが波と共に飛び散る
-    if (intensity > 0.4) {
-      ctx.save();
-      const noteCount = Math.floor(10 + intensity * 20); // 10~30個の音符
-
-      for (let i = 0; i < noteCount; i++) {
-        const basePos = megaphonePositions[i % megaphonePositions.length];
-        const angle = -Math.PI / 3 + (Math.random() * Math.PI * 2) / 3;
-        const distance = (time * 100 + i * 50) % 300;
-        const x = basePos.x + Math.cos(angle) * distance;
-        const y = basePos.y + Math.sin(angle) * distance;
-        const size = 18 + intensity * 12;
-
-        // 遠くに行くほど薄くなる
-        const fadeAlpha = Math.max(0, 1 - distance / 300);
-        ctx.globalAlpha = fadeAlpha * (0.6 + intensity * 0.3);
-
-        // 音符絵文字
-        const note = i % 3 === 0 ? '♪' : (i % 3 === 1 ? '♬' : '🎵');
-        ctx.font = `${size}px Arial`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.shadowBlur = 8;
-        ctx.shadowColor = 'rgba(100, 200, 255, 0.6)';
-        ctx.fillText(note, x, y);
-      }
-
-      ctx.restore();
-    }
-
-    // 画面全体に音の波紋を追加（intensityが高い時）
-    if (intensity > 0.6) {
-      ctx.save();
-      const rippleCount = 3;
-
-      for (let i = 0; i < rippleCount; i++) {
-        const ripplePhase = (time * 1.5 + i * 0.8) % 2;
-        const rippleRadius = ripplePhase * Math.max(width, height) * 0.5;
-        const rippleAlpha = (1 - ripplePhase / 2) * (intensity - 0.6) * 0.3;
-
-        ctx.globalAlpha = rippleAlpha;
-        ctx.strokeStyle = 'rgba(120, 210, 255, 0.5)';
-        ctx.lineWidth = 3;
-        ctx.beginPath();
-        ctx.arc(width / 2, height / 2, rippleRadius, 0, Math.PI * 2);
-        ctx.stroke();
-      }
-
-      ctx.restore();
-    }
-
-    // 画面下部に音のグロー
+    // 大きい光るパーティクル（intensityが高い時）
     if (intensity > 0.5) {
-      ctx.save();
-      ctx.globalAlpha = (intensity - 0.5) * 0.4;
+      const glowCount = Math.floor(4 + intensity * 6);
 
-      const bottomGradient = ctx.createLinearGradient(0, height - 120, 0, height);
-      bottomGradient.addColorStop(0, 'rgba(100, 200, 255, 0)');
-      bottomGradient.addColorStop(0.5, 'rgba(100, 200, 255, 0.3)');
-      bottomGradient.addColorStop(1, 'rgba(100, 200, 255, 0.5)');
+      for (let i = 0; i < glowCount; i++) {
+        const y = (offset * 0.7 + time * 100 + i * 50) % height;
+        const x = width * (0.1 + (i % 5) * 0.2);
+        const size = 5 + intensity * 8;
 
-      ctx.fillStyle = bottomGradient;
-      ctx.fillRect(0, height - 120, width, 120);
+        ctx.globalAlpha = (0.3 + intensity * 0.5) * (0.5 + Math.sin(time * 3 + i) * 0.5);
 
-      ctx.restore();
+        // 外側のグロー
+        const glowGradient = ctx.createRadialGradient(x, y, 0, x, y, size * 3);
+        glowGradient.addColorStop(0, `rgba(150, 220, 255, ${0.6 + intensity * 0.4})`);
+        glowGradient.addColorStop(0.5, `rgba(100, 200, 255, ${0.3 + intensity * 0.3})`);
+        glowGradient.addColorStop(1, 'rgba(100, 200, 255, 0)');
+        ctx.fillStyle = glowGradient;
+        ctx.beginPath();
+        ctx.arc(x, y, size * 3, 0, Math.PI * 2);
+        ctx.fill();
+
+        // 内側のコア
+        ctx.fillStyle = `rgba(200, 240, 255, ${0.8 + intensity * 0.2})`;
+        ctx.shadowBlur = 15;
+        ctx.shadowColor = 'rgba(100, 200, 255, 1)';
+        ctx.beginPath();
+        ctx.arc(x, y, size, 0, Math.PI * 2);
+        ctx.fill();
+      }
     }
+
+    ctx.restore();
   };
 
   /**

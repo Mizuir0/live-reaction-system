@@ -466,7 +466,7 @@ export const useEffectRenderer = ({ canvasRef, currentEffect }: UseEffectRendere
 
     ctx.save();
 
-    // 👏絵文字が下から上に上昇（Clapping風）
+    // 🙌絵文字が下から上に上昇（Clapping風）
     const iconCount = Math.floor(8 + intensity * 12); // 8~20個
     for (let i = 0; i < iconCount; i++) {
       // ランダムな横位置（シード値で安定した位置）
@@ -487,7 +487,7 @@ export const useEffectRenderer = ({ canvasRef, currentEffect }: UseEffectRendere
 
       ctx.globalAlpha = alpha * (0.7 + intensity * 0.3);
 
-      // 拍手の絵文字を描画
+      // 絵文字を描画
       ctx.font = `${size}px Arial`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
@@ -498,8 +498,8 @@ export const useEffectRenderer = ({ canvasRef, currentEffect }: UseEffectRendere
       ctx.shadowOffsetX = 2;
       ctx.shadowOffsetY = 2;
 
-      // 👏絵文字を描画
-      ctx.fillText('👏', x, y);
+      // 🙌絵文字を描画
+      ctx.fillText('🙌', x, y);
     }
 
     ctx.shadowBlur = 0;

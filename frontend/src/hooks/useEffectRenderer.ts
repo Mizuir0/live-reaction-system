@@ -130,7 +130,6 @@ export const useEffectRenderer = ({ canvasRef, currentEffect }: UseEffectRendere
 
     // 垂直の波を描画（Grooveの90度回転版）
     const waveCount = 4; // 波の本数
-    const offset = Math.random() * 1000;
 
     for (let i = 0; i < waveCount; i++) {
       const xPos = width * (0.2 + i * 0.2); // 固定されたx位置（垂直線）
@@ -184,6 +183,7 @@ export const useEffectRenderer = ({ canvasRef, currentEffect }: UseEffectRendere
     const particleCount = Math.floor(12 + intensity * 16);
 
     for (let i = 0; i < particleCount; i++) {
+      const offset = (i / particleCount) * height; // パーティクルを均等に配置
       const y = (offset + time * 150 + i * 30) % height; // y座標が時間で変化（下に流れる）
       const x = width * (0.15 + (i % 4) * 0.25); // 固定されたx位置
       const size = 3 + intensity * 4;
@@ -212,6 +212,7 @@ export const useEffectRenderer = ({ canvasRef, currentEffect }: UseEffectRendere
       const glowCount = Math.floor(4 + intensity * 6);
 
       for (let i = 0; i < glowCount; i++) {
+        const offset = (i / glowCount) * height; // パーティクルを均等に配置
         const y = (offset * 0.7 + time * 100 + i * 50) % height;
         const x = width * (0.1 + (i % 5) * 0.2);
         const size = 5 + intensity * 8;

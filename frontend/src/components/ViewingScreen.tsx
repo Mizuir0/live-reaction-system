@@ -489,40 +489,28 @@ const ViewingScreen: React.FC<ViewingScreenProps> = ({ videoId, userId }) => {
         )}
 
         {/* YouTube プレイヤー */}
-        {videoId ? (
-          <div style={{...styles.playerWrapper, pointerEvents: isSystemReady ? 'auto' : 'none', opacity: isSystemReady ? 1 : 0.3}}>
-            <YouTube
-              videoId={videoId ?? ''}
-              opts={opts as YouTubeProps['opts']}
-              onReady={onPlayerReady}
-              onStateChange={onPlayerStateChange}
-              style={styles.player}
-            />
-            {/* experiment群のホストモード表示 */}
-            {experimentGroup === 'experiment' && isHost && isSystemReady && (
-              <div style={styles.hostBadge}>
-                <span style={styles.hostText}>
-                  🎛️ ホストモード | 全員の動画を操作中
-                  {connectionCount && (
-                    <span style={styles.connectionCountText}>
-                      {' '}| 👥 {connectionCount.count}人接続中
-                    </span>
-                  )}
-                </span>
-              </div>
-            )}
-          </div>
-        ) : (
-          <div style={styles.noVideoPlaceholder}>
-            <div style={styles.noVideoContent}>
-              <h2 style={styles.noVideoTitle}>🐛 デバッグモード</h2>
-              <p style={styles.noVideoText}>
-                エフェクトテスト専用モードです。<br />
-                下のボタンからエフェクトを発動できます。
-              </p>
+        <div style={{...styles.playerWrapper, pointerEvents: isSystemReady ? 'auto' : 'none', opacity: isSystemReady ? 1 : 0.3}}>
+          <YouTube
+            videoId={videoId ?? ''}
+            opts={opts as YouTubeProps['opts']}
+            onReady={onPlayerReady}
+            onStateChange={onPlayerStateChange}
+            style={styles.player}
+          />
+          {/* experiment群のホストモード表示 */}
+          {experimentGroup === 'experiment' && isHost && isSystemReady && (
+            <div style={styles.hostBadge}>
+              <span style={styles.hostText}>
+                🎛️ ホストモード | 全員の動画を操作中
+                {connectionCount && (
+                  <span style={styles.connectionCountText}>
+                    {' '}| 👥 {connectionCount.count}人接続中
+                  </span>
+                )}
+              </span>
             </div>
-          </div>
-        )}
+          )}
+        </div>
 
         {/* デバッグオーバーレイ（debugモードのみ） */}
         {isDebugMode && showDebug && (
@@ -972,34 +960,6 @@ const styles: { [key: string]: React.CSSProperties } = {
     color: 'rgba(255, 255, 255, 0.9)',
     fontSize: '14px',
     fontWeight: 'normal'
-  },
-  noVideoPlaceholder: {
-    position: 'relative',
-    width: '100%',
-    height: '100%',
-    maxWidth: '1280px',
-    maxHeight: '720px',
-    display: 'flex',
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#1a1a1a',
-    borderRadius: '8px',
-    zIndex: 2
-  },
-  noVideoContent: {
-    textAlign: 'center',
-    padding: '40px'
-  },
-  noVideoTitle: {
-    color: '#fff',
-    fontSize: '32px',
-    marginBottom: '20px',
-    fontWeight: 'bold'
-  },
-  noVideoText: {
-    color: '#999',
-    fontSize: '18px',
-    lineHeight: '1.6'
   }
 };
 

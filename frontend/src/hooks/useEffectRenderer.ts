@@ -25,7 +25,6 @@ export const useEffectRenderer = ({ canvasRef, currentEffect }: UseEffectRendere
   const particlesRef = useRef<Particle[]>([]);
   const effectStartTimeRef = useRef<number>(0);
   const currentEffectRef = useRef<EffectInstruction | null>(null);
-  const wavePhaseRef = useRef<number>(0);
 
   /**
    * Yellow Glow エフェクト (笑顔): 黄色い笑顔マーク型のパーティクルが輝く

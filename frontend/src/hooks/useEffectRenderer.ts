@@ -348,9 +348,17 @@ export const useEffectRenderer = ({ canvasRef, currentEffect }: UseEffectRendere
       const xOffset = (sideWidth / (notesPerSide + 1)) * (sideIndex + 1);
       const x = isLeft ? xOffset : width - sideWidth + xOffset;
 
+      // 上下2段に配置: 偶数番目は上段、奇数番目は下段
+      const isUpperRow = Math.floor(i / 2) % 2 === 0;
       const bounceHeight = 60 + intensity * 120;
       const bounceSpeed = time * 1.5 + i * 0.5;
-      const y = height - 80 - Math.abs(Math.sin(bounceSpeed)) * bounceHeight;
+      const bounceOffset = Math.abs(Math.sin(bounceSpeed)) * bounceHeight;
+
+      // 上段: 画面上部から跳ねる / 下段: 画面下部から跳ねる
+      const y = isUpperRow
+        ? height * 0.35 - bounceOffset  // 上段: 35%付近
+        : height - 80 - bounceOffset;    // 下段: 下部
+
       const size = 35 + intensity * 25;
 
       // 🎵と🎶を交互に表示
@@ -378,13 +386,13 @@ export const useEffectRenderer = ({ canvasRef, currentEffect }: UseEffectRendere
         ctx.restore();
       }
 
-      // 影を描画
+      // 影を描画（上段と下段で影の位置を変える）
       ctx.shadowBlur = 0;
       ctx.globalAlpha = 0.25;
       ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
       ctx.beginPath();
-      const shadowY = height - 50;
-      const shadowScale = 1 - ((y - shadowY) / bounceHeight) * 0.7;
+      const shadowY = isUpperRow ? height * 0.5 : height - 50;  // 上段は画面中央、下段は下部
+      const shadowScale = 1 - Math.abs((y - shadowY) / bounceHeight) * 0.7;
       const shadowWidth = size * 0.8 * Math.max(0.2, shadowScale);
       const shadowHeight = size * 0.2 * Math.max(0.2, shadowScale);
       ctx.ellipse(x, shadowY, shadowWidth, shadowHeight, 0, 0, Math.PI * 2);

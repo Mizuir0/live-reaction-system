@@ -222,22 +222,34 @@ const ViewingScreen: React.FC<ViewingScreenProps> = ({ videoId, userId }) => {
   useEffect(() => {
     // Canvas の初期化（後のステップで描画処理を追加）
     const canvas = canvasRef.current;
-    if (canvas) {
+    if (!canvas) return;
+
+    const initializeCanvas = () => {
       const ctx = canvas.getContext('2d');
       if (ctx) {
-        // Canvas サイズを親要素に合わせる
-        canvas.width = canvas.offsetWidth;
-        canvas.height = canvas.offsetHeight;
-        
+        // Canvas サイズを親要素に合わせる（最小サイズを保証）
+        const width = canvas.offsetWidth || 1280;
+        const height = canvas.offsetHeight || 720;
+        canvas.width = width;
+        canvas.height = height;
+
         console.log('Canvas initialized:', canvas.width, 'x', canvas.height);
       }
-    }
+    };
+
+    // DOM レイアウト完了後に初期化
+    requestAnimationFrame(() => {
+      requestAnimationFrame(initializeCanvas);
+    });
 
     // ウィンドウリサイズ時の対応
     const handleResize = () => {
       if (canvas) {
-        canvas.width = canvas.offsetWidth;
-        canvas.height = canvas.offsetHeight;
+        const width = canvas.offsetWidth || 1280;
+        const height = canvas.offsetHeight || 720;
+        canvas.width = width;
+        canvas.height = height;
+        console.log('Canvas resized:', canvas.width, 'x', canvas.height);
       }
     };
 

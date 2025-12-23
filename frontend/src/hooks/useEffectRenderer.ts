@@ -124,13 +124,18 @@ export const useEffectRenderer = ({ canvasRef, currentEffect }: UseEffectRendere
 
     ctx.save();
 
-    // 📢絵文字を画面下部に配置（複数）
+    // 📢絵文字を画面左右に配置（複数）
     const megaphoneCount = Math.floor(2 + intensity * 4); // 2~6個
     const megaphonePositions = [];
 
     for (let i = 0; i < megaphoneCount; i++) {
       const seed = i * 345.678;
-      const x = (Math.sin(seed) * 0.5 + 0.5) * width;
+      // 左右に分散: 左側 (0~30%) または 右側 (70~100%)
+      const isLeft = i % 2 === 0;
+      const xRatio = isLeft
+        ? Math.sin(seed) * 0.15 + 0.15  // 左側: 0~30%
+        : Math.sin(seed) * 0.15 + 0.85; // 右側: 70~100%
+      const x = xRatio * width;
       const y = height - 60 - Math.sin(time * 2 + i) * 15;
       const size = 35 + intensity * 25;
 
@@ -366,7 +371,14 @@ export const useEffectRenderer = ({ canvasRef, currentEffect }: UseEffectRendere
     ctx.save();
 
     for (let i = 0; i < noteCount; i++) {
-      const x = (width / (noteCount + 1)) * (i + 1);
+      // 左右に分散: 左側 (0~30%) または 右側 (70~100%)
+      const isLeft = i % 2 === 0;
+      const sideWidth = width * 0.3; // 各サイド30%の幅
+      const notesPerSide = Math.ceil(noteCount / 2);
+      const sideIndex = Math.floor(i / 2);
+      const xOffset = (sideWidth / (notesPerSide + 1)) * (sideIndex + 1);
+      const x = isLeft ? xOffset : width - sideWidth + xOffset;
+
       const bounceHeight = 60 + intensity * 120;
       const bounceSpeed = time * 1.5 + i * 0.5;
       const y = height - 80 - Math.abs(Math.sin(bounceSpeed)) * bounceHeight;
@@ -585,12 +597,15 @@ export const useEffectRenderer = ({ canvasRef, currentEffect }: UseEffectRendere
 
     ctx.save();
 
-    // 音符を左右に揺らしながら配置
+    // 音符を左右の端で揺らしながら配置
     for (let i = 0; i < noteCount; i++) {
       const centerY = height * (0.2 + (i / noteCount) * 0.6);
-      const swingAmount = 80 + intensity * 120;
+      const swingAmount = 60 + intensity * 80;
       const swingSpeed = time * 1.8 + i * 0.6;
-      const x = width / 2 + Math.sin(swingSpeed) * swingAmount;
+      // 左右に分散: 左側または右側を中心にスイング
+      const isLeft = i % 2 === 0;
+      const centerX = isLeft ? width * 0.15 : width * 0.85;
+      const x = centerX + Math.sin(swingSpeed) * swingAmount;
       const y = centerY;
       const size = 40 + intensity * 30;
 
@@ -638,10 +653,23 @@ export const useEffectRenderer = ({ canvasRef, currentEffect }: UseEffectRendere
 
       for (let i = 0; i < 3; i++) {
         const y = height * (0.25 + i * 0.25);
-        ctx.beginPath();
 
+        // 左側のスイング軌跡
+        ctx.beginPath();
         for (let angle = -Math.PI; angle <= Math.PI; angle += 0.1) {
-          const swingX = width / 2 + Math.sin(angle) * (100 + intensity * 100);
+          const swingX = width * 0.15 + Math.sin(angle) * (80 + intensity * 80);
+          if (angle === -Math.PI) {
+            ctx.moveTo(swingX, y);
+          } else {
+            ctx.lineTo(swingX, y);
+          }
+        }
+        ctx.stroke();
+
+        // 右側のスイング軌跡
+        ctx.beginPath();
+        for (let angle = -Math.PI; angle <= Math.PI; angle += 0.1) {
+          const swingX = width * 0.85 + Math.sin(angle) * (80 + intensity * 80);
           if (angle === -Math.PI) {
             ctx.moveTo(swingX, y);
           } else {
@@ -709,124 +737,137 @@ export const useEffectRenderer = ({ canvasRef, currentEffect }: UseEffectRendere
     intensity: number,
     _elapsed: number
   ) => {
-    const centerX = width / 2;
+    // 左右に2つの焦点を作成
+    const leftCenterX = width * 0.15;
+    const rightCenterX = width * 0.85;
     const centerY = height / 2;
     const time = performance.now() * 0.001;
 
-    // 中心から外側へのレーザー集中線
-    ctx.save();
-    ctx.globalAlpha = 0.5 + intensity * 0.4;
+    const centers = [
+      { x: leftCenterX, y: centerY },
+      { x: rightCenterX, y: centerY }
+    ];
 
-    const lineCount = Math.floor(12 + intensity * 16); // 12~28本の集中線
-    const maxLength = Math.sqrt(width * width + height * height) / 2;
+    for (const center of centers) {
+      // 中心から外側へのレーザー集中線
+      ctx.save();
+      ctx.globalAlpha = 0.5 + intensity * 0.4;
 
-    for (let i = 0; i < lineCount; i++) {
-      const angle = (Math.PI * 2 * i) / lineCount;
-      const length = maxLength * (0.8 + intensity * 0.2);
-      const pulse = Math.sin(time * 3 + i * 0.3) * 0.15 + 0.85;
+      const lineCount = Math.floor(8 + intensity * 12); // 各側8~20本の集中線
+      const maxLength = Math.min(width * 0.4, height * 0.6);
 
-      // 赤と青を交互に
-      const isRed = i % 2 === 0;
-      const color = isRed
-        ? `rgba(255, 50, 50, ${0.7 + intensity * 0.3})`   // 赤
-        : `rgba(50, 150, 255, ${0.7 + intensity * 0.3})`; // 青
+      for (let i = 0; i < lineCount; i++) {
+        const angle = (Math.PI * 2 * i) / lineCount;
+        const length = maxLength * (0.8 + intensity * 0.2);
+        const pulse = Math.sin(time * 3 + i * 0.3) * 0.15 + 0.85;
 
-      // 中心から外側への線
-      const gradient = ctx.createLinearGradient(
-        centerX,
-        centerY,
-        centerX + Math.cos(angle) * length * pulse,
-        centerY + Math.sin(angle) * length * pulse
-      );
+        // 赤と青を交互に
+        const isRed = i % 2 === 0;
+        const color = isRed
+          ? `rgba(255, 50, 50, ${0.7 + intensity * 0.3})`   // 赤
+          : `rgba(50, 150, 255, ${0.7 + intensity * 0.3})`; // 青
 
-      gradient.addColorStop(0, color);
-      gradient.addColorStop(0.6, color.replace(/[\d.]+\)$/g, '0.4)'));
-      gradient.addColorStop(1, color.replace(/[\d.]+\)$/g, '0)'));
+        // 中心から外側への線
+        const gradient = ctx.createLinearGradient(
+          center.x,
+          center.y,
+          center.x + Math.cos(angle) * length * pulse,
+          center.y + Math.sin(angle) * length * pulse
+        );
 
-      ctx.strokeStyle = gradient;
-      ctx.lineWidth = 3 + intensity * 4;
-      ctx.shadowBlur = 15 + intensity * 10;
-      ctx.shadowColor = isRed ? 'rgba(255, 50, 50, 0.8)' : 'rgba(50, 150, 255, 0.8)';
-      ctx.beginPath();
-      ctx.moveTo(centerX, centerY);
-      ctx.lineTo(
-        centerX + Math.cos(angle) * length * pulse,
-        centerY + Math.sin(angle) * length * pulse
-      );
-      ctx.stroke();
-    }
+        gradient.addColorStop(0, color);
+        gradient.addColorStop(0.6, color.replace(/[\d.]+\)$/g, '0.4)'));
+        gradient.addColorStop(1, color.replace(/[\d.]+\)$/g, '0)'));
 
-    ctx.restore();
-
-    // 静かに回転する光の粒子
-    ctx.save();
-    const particleCount = Math.floor(5 + intensity * 15); // 5~20個の粒子
-
-    for (let i = 0; i < particleCount; i++) {
-      const angle = (Math.PI * 2 * i) / particleCount + time * 0.3;
-      const radius = 100 + intensity * 150;
-      const x = centerX + Math.cos(angle) * radius;
-      const y = centerY + Math.sin(angle) * radius;
-      const size = 3 + intensity * 4;
-      const alpha = 0.4 + Math.sin(time * 2 + i) * 0.3;
-
-      ctx.globalAlpha = alpha;
-      ctx.fillStyle = 'rgba(173, 216, 255, 0.8)'; // 淡い青
-      ctx.shadowBlur = 10;
-      ctx.shadowColor = 'rgba(64, 156, 255, 0.8)';
-      ctx.beginPath();
-      ctx.arc(x, y, size, 0, Math.PI * 2);
-      ctx.fill();
-
-      // 粒子の軌跡を描画
-      if (intensity > 0.5) {
-        ctx.globalAlpha = 0.2;
-        ctx.strokeStyle = 'rgba(173, 216, 255, 0.5)';
-        ctx.lineWidth = 1;
+        ctx.strokeStyle = gradient;
+        ctx.lineWidth = 3 + intensity * 4;
+        ctx.shadowBlur = 15 + intensity * 10;
+        ctx.shadowColor = isRed ? 'rgba(255, 50, 50, 0.8)' : 'rgba(50, 150, 255, 0.8)';
         ctx.beginPath();
-        ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+        ctx.moveTo(center.x, center.y);
+        ctx.lineTo(
+          center.x + Math.cos(angle) * length * pulse,
+          center.y + Math.sin(angle) * length * pulse
+        );
         ctx.stroke();
       }
-    }
-
-    ctx.restore();
-
-    // 中心に穏やかに脈動する光
-    ctx.save();
-    const pulse = Math.sin(time * 1.5) * 0.2 + 0.8;
-    ctx.globalAlpha = 0.3 + intensity * 0.3;
-
-    const centralGradient = ctx.createRadialGradient(
-      centerX, centerY, 0,
-      centerX, centerY, 80 + intensity * 40
-    );
-    centralGradient.addColorStop(0, 'rgba(64, 156, 255, 0.5)');
-    centralGradient.addColorStop(0.5, 'rgba(64, 156, 255, 0.2)');
-    centralGradient.addColorStop(1, 'rgba(64, 156, 255, 0)');
-
-    ctx.fillStyle = centralGradient;
-    ctx.beginPath();
-    ctx.arc(centerX, centerY, (80 + intensity * 40) * pulse, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.restore();
-
-    // intensityが高い時は画面周辺にビネット効果
-    if (intensity > 0.6) {
-      ctx.save();
-      ctx.globalAlpha = (intensity - 0.6) * 0.5;
-
-      const vignetteGradient = ctx.createRadialGradient(
-        centerX, centerY, Math.min(width, height) * 0.3,
-        centerX, centerY, Math.max(width, height) * 0.7
-      );
-      vignetteGradient.addColorStop(0, 'rgba(0, 50, 100, 0)');
-      vignetteGradient.addColorStop(1, 'rgba(0, 50, 100, 0.4)');
-
-      ctx.fillStyle = vignetteGradient;
-      ctx.fillRect(0, 0, width, height);
 
       ctx.restore();
+    }
+
+    // 静かに回転する光の粒子（各焦点の周り）
+    for (const center of centers) {
+      ctx.save();
+      const particleCount = Math.floor(3 + intensity * 8); // 各側3~11個の粒子
+
+      for (let i = 0; i < particleCount; i++) {
+        const angle = (Math.PI * 2 * i) / particleCount + time * 0.3;
+        const radius = 60 + intensity * 100;
+        const x = center.x + Math.cos(angle) * radius;
+        const y = center.y + Math.sin(angle) * radius;
+        const size = 3 + intensity * 4;
+        const alpha = 0.4 + Math.sin(time * 2 + i) * 0.3;
+
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle = 'rgba(173, 216, 255, 0.8)'; // 淡い青
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = 'rgba(64, 156, 255, 0.8)';
+        ctx.beginPath();
+        ctx.arc(x, y, size, 0, Math.PI * 2);
+        ctx.fill();
+
+        // 粒子の軌跡を描画
+        if (intensity > 0.5) {
+          ctx.globalAlpha = 0.2;
+          ctx.strokeStyle = 'rgba(173, 216, 255, 0.5)';
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.arc(center.x, center.y, radius, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+      }
+
+      ctx.restore();
+
+      // 中心に穏やかに脈動する光
+      ctx.save();
+      const pulse = Math.sin(time * 1.5) * 0.2 + 0.8;
+      ctx.globalAlpha = 0.3 + intensity * 0.3;
+
+      const centralGradient = ctx.createRadialGradient(
+        center.x, center.y, 0,
+        center.x, center.y, 60 + intensity * 30
+      );
+      centralGradient.addColorStop(0, 'rgba(64, 156, 255, 0.5)');
+      centralGradient.addColorStop(0.5, 'rgba(64, 156, 255, 0.2)');
+      centralGradient.addColorStop(1, 'rgba(64, 156, 255, 0)');
+
+      ctx.fillStyle = centralGradient;
+      ctx.beginPath();
+      ctx.arc(center.x, center.y, (60 + intensity * 30) * pulse, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.restore();
+    }
+
+    // intensityが高い時は左右の端にビネット効果
+    if (intensity > 0.6) {
+      for (const center of centers) {
+        ctx.save();
+        ctx.globalAlpha = (intensity - 0.6) * 0.5;
+
+        const vignetteGradient = ctx.createRadialGradient(
+          center.x, center.y, Math.min(width * 0.2, height * 0.3),
+          center.x, center.y, Math.min(width * 0.4, height * 0.6)
+        );
+        vignetteGradient.addColorStop(0, 'rgba(0, 50, 100, 0)');
+        vignetteGradient.addColorStop(1, 'rgba(0, 50, 100, 0.4)');
+
+        ctx.fillStyle = vignetteGradient;
+        ctx.fillRect(0, 0, width, height);
+
+        ctx.restore();
+      }
     }
   };
 

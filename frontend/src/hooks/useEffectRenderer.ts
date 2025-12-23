@@ -120,15 +120,7 @@ export const useEffectRenderer = ({ canvasRef, currentEffect }: UseEffectRendere
 
     ctx.save();
 
-    // 背景に薄いグラデーション
-    const bgGradient = ctx.createLinearGradient(0, 0, 0, height);
-    bgGradient.addColorStop(0, `rgba(100, 200, 255, ${0.02 * intensity})`);
-    bgGradient.addColorStop(0.5, `rgba(100, 200, 255, ${0.05 * intensity})`);
-    bgGradient.addColorStop(1, `rgba(100, 200, 255, ${0.02 * intensity})`);
-    ctx.fillStyle = bgGradient;
-    ctx.fillRect(0, 0, width, height);
-
-    // 垂直の波を描画（Grooveの90度回転版）
+    // 垂直の波を描画（Grooveの90度回転版・青色）
     const waveCount = 4; // 波の本数
 
     for (let i = 0; i < waveCount; i++) {
@@ -137,32 +129,30 @@ export const useEffectRenderer = ({ canvasRef, currentEffect }: UseEffectRendere
       const frequency = 0.02; // 波の周波数
       const speed = time * 2 + i * 0.5; // 波の速度（下に流れる）
 
-      // 波線を描画
+      // 主要な波線（明るい青）
       ctx.beginPath();
+      ctx.strokeStyle = `rgba(100, 200, 255, ${0.6 + intensity * 0.4})`; // より明るい青、不透明度アップ
+      ctx.lineWidth = 5 + intensity * 5; // 太さアップ
+      ctx.shadowBlur = 25; // グローを強化
+      ctx.shadowColor = 'rgba(100, 200, 255, 0.9)';
+
       for (let y = 0; y < height; y += 5) {
         const x = xPos + Math.sin((y * frequency) + speed) * amplitude;
-
         if (y === 0) {
           ctx.moveTo(x, y);
         } else {
           ctx.lineTo(x, y);
         }
       }
-
-      // グラデーションストローク
-      const gradient = ctx.createLinearGradient(0, 0, 0, height);
-      gradient.addColorStop(0, `rgba(100, 200, 255, ${0.3 + intensity * 0.4})`);
-      gradient.addColorStop(0.5, `rgba(150, 220, 255, ${0.6 + intensity * 0.4})`);
-      gradient.addColorStop(1, `rgba(100, 200, 255, ${0.3 + intensity * 0.4})`);
-
-      ctx.strokeStyle = gradient;
-      ctx.lineWidth = 3 + intensity * 3;
-      ctx.shadowBlur = 10 + intensity * 10;
-      ctx.shadowColor = 'rgba(100, 200, 255, 0.6)';
       ctx.stroke();
 
-      // 2本目の薄い波線（外側の光）
+      // 二重線効果（外側の光）
       ctx.beginPath();
+      ctx.strokeStyle = `rgba(150, 220, 255, ${0.3 + intensity * 0.3})`;
+      ctx.lineWidth = 10 + intensity * 8;
+      ctx.shadowBlur = 35;
+      ctx.shadowColor = 'rgba(100, 200, 255, 0.7)';
+
       for (let y = 0; y < height; y += 5) {
         const x = xPos + Math.sin((y * frequency) + speed) * amplitude;
         if (y === 0) {
@@ -171,73 +161,57 @@ export const useEffectRenderer = ({ canvasRef, currentEffect }: UseEffectRendere
           ctx.lineTo(x, y);
         }
       }
-      ctx.strokeStyle = `rgba(150, 220, 255, ${0.2 + intensity * 0.3})`;
-      ctx.lineWidth = 6 + intensity * 6;
-      ctx.shadowBlur = 20 + intensity * 15;
       ctx.stroke();
     }
 
     ctx.shadowBlur = 0;
 
-    // パーティクル（上から下に流れる）
-    const particleCount = Math.floor(12 + intensity * 16);
-
+    // 上下に流れるパーティクル（増量、大型化）
+    const particleCount = Math.floor(20 + intensity * 35); // 20~55個に増量
     for (let i = 0; i < particleCount; i++) {
-      const offset = (i / particleCount) * height; // パーティクルを均等に配置
-      const y = (offset + time * 150 + i * 30) % height; // y座標が時間で変化（下に流れる）
-      const x = width * (0.15 + (i % 4) * 0.25); // 固定されたx位置
-      const size = 3 + intensity * 4;
+      const offset = (i / particleCount) * height;
+      const y = (offset + time * 150 + i * 30) % height;
+      const x = width * (0.15 + (i % 4) * 0.25) + Math.sin(time * 3 + i) * 25;
+      const size = 6 + intensity * 10; // サイズアップ
+      const alpha = 0.7 + Math.sin(time * 2 + i * 0.5) * 0.3; // 不透明度アップ
 
-      // パーティクル本体
-      ctx.globalAlpha = 0.6 + intensity * 0.4;
-      ctx.fillStyle = `rgba(100, 200, 255, ${0.8 + intensity * 0.2})`;
-      ctx.shadowBlur = 8 + intensity * 8;
-      ctx.shadowColor = 'rgba(100, 200, 255, 0.8)';
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = 'rgba(100, 200, 255, 0.95)'; // より明るく鮮やかに
+      ctx.shadowBlur = 18; // グロー強化
+      ctx.shadowColor = 'rgba(100, 200, 255, 1)';
       ctx.beginPath();
       ctx.arc(x, y, size, 0, Math.PI * 2);
       ctx.fill();
 
-      // パーティクルの尾
-      const tailGradient = ctx.createLinearGradient(x, y - 20, x, y);
-      tailGradient.addColorStop(0, 'rgba(100, 200, 255, 0)');
-      tailGradient.addColorStop(1, `rgba(100, 200, 255, ${0.4 + intensity * 0.4})`);
-      ctx.fillStyle = tailGradient;
-      ctx.fillRect(x - 1, y - 20, 2, 20);
-    }
-
-    ctx.shadowBlur = 0;
-
-    // 大きい光るパーティクル（intensityが高い時）
-    if (intensity > 0.5) {
-      const glowCount = Math.floor(4 + intensity * 6);
-
-      for (let i = 0; i < glowCount; i++) {
-        const offset = (i / glowCount) * height; // パーティクルを均等に配置
-        const y = (offset * 0.7 + time * 100 + i * 50) % height;
-        const x = width * (0.1 + (i % 5) * 0.2);
-        const size = 5 + intensity * 8;
-
-        ctx.globalAlpha = (0.3 + intensity * 0.5) * (0.5 + Math.sin(time * 3 + i) * 0.5);
-
-        // 外側のグロー
-        const glowGradient = ctx.createRadialGradient(x, y, 0, x, y, size * 3);
-        glowGradient.addColorStop(0, `rgba(150, 220, 255, ${0.6 + intensity * 0.4})`);
-        glowGradient.addColorStop(0.5, `rgba(100, 200, 255, ${0.3 + intensity * 0.3})`);
-        glowGradient.addColorStop(1, 'rgba(100, 200, 255, 0)');
-        ctx.fillStyle = glowGradient;
+      // パーティクルの内側に白いコアを追加（明るさ強調）
+      if (intensity > 0.4) {
+        ctx.fillStyle = 'rgba(200, 240, 255, 0.8)';
+        ctx.shadowBlur = 8;
         ctx.beginPath();
-        ctx.arc(x, y, size * 3, 0, Math.PI * 2);
-        ctx.fill();
-
-        // 内側のコア
-        ctx.fillStyle = `rgba(200, 240, 255, ${0.8 + intensity * 0.2})`;
-        ctx.shadowBlur = 15;
-        ctx.shadowColor = 'rgba(100, 200, 255, 1)';
-        ctx.beginPath();
-        ctx.arc(x, y, size, 0, Math.PI * 2);
+        ctx.arc(x, y, size * 0.4, 0, Math.PI * 2);
         ctx.fill();
       }
     }
+
+    ctx.restore();
+
+    // 画面端に上下の脈動するグロー（強化）
+    ctx.save();
+    const pulse = Math.sin(time * 2.5) * 0.4 + 0.8; // 脈動を強化
+
+    // 上端（範囲拡大、明度アップ）
+    const topGradient = ctx.createLinearGradient(0, 0, 0, 200);
+    topGradient.addColorStop(0, `rgba(100, 200, 255, ${(0.5 + intensity * 0.4) * pulse})`);
+    topGradient.addColorStop(1, 'rgba(100, 200, 255, 0)');
+    ctx.fillStyle = topGradient;
+    ctx.fillRect(0, 0, width, 200);
+
+    // 下端（範囲拡大、明度アップ）
+    const bottomGradient = ctx.createLinearGradient(0, height - 200, 0, height);
+    bottomGradient.addColorStop(0, 'rgba(100, 200, 255, 0)');
+    bottomGradient.addColorStop(1, `rgba(100, 200, 255, ${(0.5 + intensity * 0.4) * pulse})`);
+    ctx.fillStyle = bottomGradient;
+    ctx.fillRect(0, height - 200, width, 200);
 
     ctx.restore();
   };

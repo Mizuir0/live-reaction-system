@@ -466,28 +466,45 @@ export const useEffectRenderer = ({ canvasRef, currentEffect }: UseEffectRendere
 
     ctx.save();
 
-    // 🙌絵文字を画面全体に散らして配置（8~20個に増量）
-    const emojiCount = Math.floor(8 + intensity * 12);
-    for (let i = 0; i < emojiCount; i++) {
-      const seed = i * 234.567;
-      // x座標: 画面全体に分散（左右端は避ける）
-      const x = (Math.sin(seed) * 0.4 + 0.5) * width;
-      // y座標: 画面の30%～90%の範囲に分散
-      const baseY = height * (0.3 + (Math.sin(seed * 1.5) * 0.3 + 0.3));
-      const y = baseY + Math.sin(time * 2 + i * 0.5) * 30;
-      const size = 45 + intensity * 35;
+    // 👏絵文字が下から上に上昇（Clapping風）
+    const iconCount = Math.floor(8 + intensity * 12); // 8~20個
+    for (let i = 0; i < iconCount; i++) {
+      // ランダムな横位置（シード値で安定した位置）
+      const seed = i * 123.456;
+      const x = (Math.sin(seed) * 0.5 + 0.5) * width;
 
-      // 🙌絵文字を描画
-      ctx.globalAlpha = 0.85 + intensity * 0.15;
+      // 下から上に上昇
+      const baseY = height + 50;
+      const riseSpeed = 150 + (i % 3) * 50; // 上昇速度
+      const y = baseY - ((time * riseSpeed + i * 100) % (height + 150));
+
+      // サイズ（intensity で変化）
+      const size = 35 + intensity * 25 + Math.sin(time * 3 + i) * 5;
+
+      // 透明度（上に行くほど薄くなる）
+      const fadeStart = height * 0.3;
+      const alpha = y > fadeStart ? 1.0 : Math.max(0, y / fadeStart);
+
+      ctx.globalAlpha = alpha * (0.7 + intensity * 0.3);
+
+      // 拍手の絵文字を描画
       ctx.font = `${size}px Arial`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.shadowBlur = 15;
-      ctx.shadowColor = 'rgba(255, 215, 0, 0.8)';
-      ctx.fillText('🙌', x, y);
+
+      // ゴールドのシャドウ
+      ctx.shadowBlur = 8;
+      ctx.shadowColor = 'rgba(255, 215, 0, 0.6)';
+      ctx.shadowOffsetX = 2;
+      ctx.shadowOffsetY = 2;
+
+      // 👏絵文字を描画
+      ctx.fillText('👏', x, y);
     }
 
     ctx.shadowBlur = 0;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 0;
     ctx.restore();
 
     // カラフルな紙吹雪（上から降ってくる）

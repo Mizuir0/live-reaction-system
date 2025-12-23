@@ -334,7 +334,7 @@ export const useEffectRenderer = ({ canvasRef, currentEffect }: UseEffectRendere
     intensity: number,
     _elapsed: number
   ) => {
-    const noteCount = Math.floor(6 + intensity * 12); // 6~18個の音符
+    const noteCount = Math.floor(8 + intensity * 16); // 8~24個に増量
     const time = performance.now() * 0.002;
 
     ctx.save();
@@ -359,42 +359,50 @@ export const useEffectRenderer = ({ canvasRef, currentEffect }: UseEffectRendere
         ? height * 0.35 - bounceOffset  // 上段: 35%付近
         : height - 80 - bounceOffset;    // 下段: 下部
 
-      const size = 35 + intensity * 25;
+      const size = 50 + intensity * 35; // サイズを大幅に増加
 
       // 🎵と🎶を交互に表示
       const emoji = i % 2 === 0 ? '🎵' : '🎶';
 
-      // 音符の絵文字を描画
-      ctx.globalAlpha = 0.85 + intensity * 0.15;
+      // 外側の強いグロー（白っぽい光）
+      ctx.globalAlpha = 0.6;
       ctx.font = `${size}px Arial`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-
-      // グロー効果
-      ctx.shadowBlur = 15 + intensity * 10;
-      ctx.shadowColor = 'rgba(100, 200, 255, 0.8)';
+      ctx.shadowBlur = 40;
+      ctx.shadowColor = 'rgba(200, 240, 255, 1)';
+      ctx.fillStyle = 'rgba(200, 240, 255, 0.3)';
       ctx.fillText(emoji, x, y);
 
-      // 跳ねている時に少し回転させる
-      const rotation = Math.sin(bounceSpeed * 2) * 0.2;
+      // 音符の絵文字を描画（メイン）
+      ctx.globalAlpha = 1.0; // 完全に不透明
+      ctx.shadowBlur = 25 + intensity * 15;
+      ctx.shadowColor = 'rgba(100, 200, 255, 1)';
+      ctx.fillStyle = '#64C8FF'; // 明るい青色
+      ctx.fillText(emoji, x, y);
+
+      // 跳ねている時に少し回転させる（追加の視覚効果）
+      const rotation = Math.sin(bounceSpeed * 2) * 0.15;
       if (Math.abs(rotation) > 0.05) {
         ctx.save();
         ctx.translate(x, y);
         ctx.rotate(rotation);
-        ctx.globalAlpha = 0.5;
+        ctx.globalAlpha = 0.3;
+        ctx.shadowBlur = 15;
+        ctx.fillStyle = 'rgba(100, 200, 255, 0.5)';
         ctx.fillText(emoji, 0, 0);
         ctx.restore();
       }
 
       // 影を描画（上段と下段で影の位置を変える）
       ctx.shadowBlur = 0;
-      ctx.globalAlpha = 0.25;
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+      ctx.globalAlpha = 0.35; // 影を少し濃く
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
       ctx.beginPath();
       const shadowY = isUpperRow ? height * 0.5 : height - 50;  // 上段は画面中央、下段は下部
       const shadowScale = 1 - Math.abs((y - shadowY) / bounceHeight) * 0.7;
-      const shadowWidth = size * 0.8 * Math.max(0.2, shadowScale);
-      const shadowHeight = size * 0.2 * Math.max(0.2, shadowScale);
+      const shadowWidth = size * 0.9 * Math.max(0.3, shadowScale); // 影を少し大きく
+      const shadowHeight = size * 0.25 * Math.max(0.3, shadowScale);
       ctx.ellipse(x, shadowY, shadowWidth, shadowHeight, 0, 0, Math.PI * 2);
       ctx.fill();
       ctx.globalAlpha = 1;

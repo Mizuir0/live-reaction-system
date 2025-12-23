@@ -466,21 +466,24 @@ export const useEffectRenderer = ({ canvasRef, currentEffect }: UseEffectRendere
 
     ctx.save();
 
-    // 🙌絵文字を画面下部に配置（5~15個）
-    const emojiCount = Math.floor(5 + intensity * 10);
+    // 🙌絵文字を画面全体に散らして配置（8~20個に増量）
+    const emojiCount = Math.floor(8 + intensity * 12);
     for (let i = 0; i < emojiCount; i++) {
       const seed = i * 234.567;
-      const x = (Math.sin(seed) * 0.5 + 0.5) * width;
-      const y = height * 0.7 + Math.sin(time * 2 + i * 0.5) * 20;
-      const size = 40 + intensity * 30;
+      // x座標: 画面全体に分散（左右端は避ける）
+      const x = (Math.sin(seed) * 0.4 + 0.5) * width;
+      // y座標: 画面の30%～90%の範囲に分散
+      const baseY = height * (0.3 + (Math.sin(seed * 1.5) * 0.3 + 0.3));
+      const y = baseY + Math.sin(time * 2 + i * 0.5) * 30;
+      const size = 45 + intensity * 35;
 
       // 🙌絵文字を描画
-      ctx.globalAlpha = 0.8 + intensity * 0.2;
+      ctx.globalAlpha = 0.85 + intensity * 0.15;
       ctx.font = `${size}px Arial`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.shadowBlur = 10;
-      ctx.shadowColor = 'rgba(255, 215, 0, 0.6)';
+      ctx.shadowBlur = 15;
+      ctx.shadowColor = 'rgba(255, 215, 0, 0.8)';
       ctx.fillText('🙌', x, y);
     }
 
@@ -529,27 +532,6 @@ export const useEffectRenderer = ({ canvasRef, currentEffect }: UseEffectRendere
     }
 
     ctx.restore();
-
-    // intensity が高い時は追加の🎊絵文字を表示
-    if (intensity > 0.6) {
-      ctx.save();
-      const partyCount = Math.floor(3 + (intensity - 0.6) * 10);
-
-      for (let i = 0; i < partyCount; i++) {
-        const seed = i * 456.789;
-        const x = (Math.sin(seed) * 0.5 + 0.5) * width;
-        const y = height * 0.2 + Math.sin(time * 3 + i) * 30;
-        const size = 30 + intensity * 20;
-
-        ctx.globalAlpha = 0.6 + Math.sin(time * 2 + i) * 0.3;
-        ctx.font = `${size}px Arial`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText('🎊', x, y);
-      }
-
-      ctx.restore();
-    }
 
     // 画面全体に明るいグロー効果
     if (intensity > 0.5) {

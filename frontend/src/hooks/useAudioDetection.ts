@@ -31,7 +31,7 @@ export const useAudioDetection = (): UseAudioDetectionReturn => {
 
   const [debugInfo, setDebugInfo] = useState<AudioDebugInfo>({
     volume: 0,
-    volumeThreshold: 0.3,
+    volumeThreshold: 0.2,
     isActive: false,
     error: null
   });
@@ -66,9 +66,9 @@ export const useAudioDetection = (): UseAudioDetectionReturn => {
    * 歓声検出（音量が1秒間持続的に閾値を超える）
    */
   const detectCheer = (volume: number, currentTime: number): void => {
-    const VOLUME_THRESHOLD = 0.3; // 音量閾値
-    const SUSTAINED_DURATION_MS = 1000; // 1秒間持続
-    const COOLDOWN_MS = 2000; // 2秒のクールダウン
+    const VOLUME_THRESHOLD = 0.2; // 音量閾値（20%）
+    const SUSTAINED_DURATION_MS = 500; // 0.5秒間持続
+    const COOLDOWN_MS = 1000; // 1秒のクールダウン
 
     if (volume > VOLUME_THRESHOLD) {
       // 高音量が開始したタイミングを記録
@@ -102,7 +102,7 @@ export const useAudioDetection = (): UseAudioDetectionReturn => {
    */
   const detectClap = (rawVolume: number, currentTime: number): void => {
     const VOLUME_SPIKE_THRESHOLD = 0.05; // 急激な変化の閾値
-    const MIN_VOLUME = 0.3; // 最低音量（ノイズ除去）
+    const MIN_VOLUME = 0.15; // 最低音量（15%、ノイズ除去）
     const COOLDOWN_MS = 200; // 0.2秒のクールダウン
 
     // 音量の変化量を計算

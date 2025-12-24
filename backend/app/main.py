@@ -301,9 +301,9 @@ class AggregationEngine:
             print(f"  ✨ Groove効果発動! (intensity: {intensity:.2f})")
 
         # 7. cheer（歓声・音声）判定
-        elif density_event.get('cheer', 0) >= 0.25:
+        elif density_event.get('cheer', 0) >= 0.15:
             effect_type = 'wave'  # 歓声は波のエフェクトを使用
-            intensity = min(density_event['cheer'] / 0.5, 1.0)
+            intensity = min(density_event['cheer'] / 0.3, 1.0)
             print(f"  ✨ Wave効果発動（歓声）! (intensity: {intensity:.2f})")
 
         # 8. wave（頷き）判定
@@ -325,17 +325,11 @@ class AggregationEngine:
             print(f"  ✨ Focus効果発動! (intensity: {intensity:.2f})")
         
         if effect_type:
-            # 歓声（cheer）の場合は時間を短くする
-            if effect_type == 'wave' and density_event.get('cheer', 0) >= 0.25:
-                duration_ms = 1500  # 歓声は1.5秒
-            else:
-                duration_ms = 2000  # その他は2秒
-
             return {
                 "type": "effect",
                 "effectType": effect_type,
                 "intensity": intensity,
-                "durationMs": duration_ms,
+                "durationMs": 2000,
                 "timestamp": int(now_ms),
                 "debug": {
                     "activeUsers": num_active_users,

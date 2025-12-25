@@ -102,7 +102,7 @@ export const useAudioDetection = (): UseAudioDetectionReturn => {
    */
   const detectClap = (rawVolume: number, currentTime: number): void => {
     const VOLUME_SPIKE_THRESHOLD = 0.05; // 急激な変化の閾値
-    const MIN_VOLUME = 0.15; // 最低音量（15%、ノイズ除去）
+    const MIN_VOLUME = 0.10; // 最低音量（10%、ノイズ除去）
     const COOLDOWN_MS = 200; // 0.2秒のクールダウン
 
     // 音量の変化量を計算

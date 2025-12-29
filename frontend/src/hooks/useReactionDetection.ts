@@ -440,25 +440,26 @@ export const useReactionDetection = (): UseReactionDetectionReturn => {
 
   /**
    * 手が上がっている検出（ステート型）
+   * 肘の位置で判定（手首が画角外に出ても検出可能）
    */
   const detectHandUp = (poseLandmarks: any): boolean => {
     if (!poseLandmarks || poseLandmarks.length === 0) return false;
 
-    // Pose landmark indices: 15=左手首, 16=右手首, 11=左肩, 12=右肩
-    const leftWrist = poseLandmarks[0][15];
-    const rightWrist = poseLandmarks[0][16];
+    // Pose landmark indices: 13=左肘, 14=右肘, 11=左肩, 12=右肩
+    const leftElbow = poseLandmarks[0][13];
+    const rightElbow = poseLandmarks[0][14];
     const leftShoulder = poseLandmarks[0][11];
     const rightShoulder = poseLandmarks[0][12];
 
-    if (!leftWrist || !rightWrist || !leftShoulder || !rightShoulder) return false;
+    if (!leftElbow || !rightElbow || !leftShoulder || !rightShoulder) return false;
 
-    // 少なくとも片手が肩より上にあるかチェック
-    const leftHandUp = leftWrist.y < leftShoulder.y - 0.1; // 肩より10%上
-    const rightHandUp = rightWrist.y < rightShoulder.y - 0.1;
+    // 少なくとも片方の肘が肩より上にあるかチェック
+    const leftHandUp = leftElbow.y < leftShoulder.y - 0.05; // 肩より5%上
+    const rightHandUp = rightElbow.y < rightShoulder.y - 0.05;
 
-    // 手首の visibility もチェック（低すぎる場合は検出しない）
-    const leftVisible = leftWrist.visibility > 0.5;
-    const rightVisible = rightWrist.visibility > 0.5;
+    // 肘の visibility もチェック（低すぎる場合は検出しない）
+    const leftVisible = leftElbow.visibility > 0.5;
+    const rightVisible = rightElbow.visibility > 0.5;
 
     return (leftHandUp && leftVisible) || (rightHandUp && rightVisible);
   };

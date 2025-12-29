@@ -206,7 +206,7 @@ function App() {
       {currentScreen === 'completion' && (
         <CompletionScreen
           completionCode={completionCode}
-          surveyUrl="https://forms.google.com/"
+          surveyUrl="https://docs.google.com/forms/d/e/1FAIpQLSfXM6iynP0W-FYOrFn3h3z8YFOSiHlPN9vkdGMArP4o5TtcRA/viewform?usp=dialog"
           onBackToInitial={handleBackToInitial}
         />
       )}

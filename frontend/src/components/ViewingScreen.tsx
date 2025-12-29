@@ -85,7 +85,8 @@ const ViewingScreen: React.FC<ViewingScreenProps> = ({ videoId, userId, onComple
     debugInfo: audioDebugInfo,
     resetEvents: resetAudioEvents,
     startAudio,
-    stopAudio
+    stopAudio,
+    hasMicrophone
   } = useAudioDetection();
   const {
     isConnected: wsConnected,
@@ -208,7 +209,8 @@ const ViewingScreen: React.FC<ViewingScreenProps> = ({ videoId, userId, onComple
         states: currentStates,
         events: currentEvents,
         videoTime: videoTime,
-        sessionId: sessionId
+        sessionId: sessionId,
+        hasMicrophone: hasMicrophone
       });
     }, 1000); // 1秒ごと
 

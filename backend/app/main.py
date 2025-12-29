@@ -189,14 +189,19 @@ class AggregationEngine:
     """集約エンジン：全ユーザーのデータを集約してエフェクトを決定"""
     def __init__(self):
         self.user_data: Dict[str, UserReactionData] = {}
+        self.user_has_microphone: Dict[str, bool] = {}  # ユーザーごとのマイク許可状態
         self.last_effect_type = None
         self.last_aggregation_time = time.time()
-        
+
     def update_user_data(self, user_id: str, data: dict):
         """ユーザーデータを更新"""
         if user_id not in self.user_data:
             self.user_data[user_id] = UserReactionData(user_id)
         self.user_data[user_id].add_sample(data)
+
+        # マイク許可状態を記録
+        if 'hasMicrophone' in data:
+            self.user_has_microphone[user_id] = data['hasMicrophone']
         
     def aggregate(self) -> Optional[dict]:
         """
@@ -245,21 +250,34 @@ class AggregationEngine:
         # Event型の集計（density_event）
         # ========================
         event_totals = defaultdict(int)
-        
+
         for user_id, samples in active_users.items():
             for sample in samples:
                 events = sample.get('events', {})
                 for event_name, count in events.items():
                     event_totals[event_name] += count
-        
+
+        # マイクありユーザー数をカウント（音声エフェクト用）
+        microphone_users = [uid for uid in active_users.keys() if self.user_has_microphone.get(uid, False)]
+        num_microphone_users = len(microphone_users)
+
         # density_event計算
-        # 密度 = 合計カウント / (有効ユーザー数 * 時間窓[秒])
+        # 音声イベント（cheer, clap）: マイクありユーザー数を分母に
+        # その他のイベント: 全アクティブユーザー数を分母に
         density_event = {}
         window_seconds = window_ms / 1000
         for event_name, total in event_totals.items():
-            density_event[event_name] = total / (num_active_users * window_seconds)
-            
-        print(f"  📈 density_event: {density_event}")
+            if event_name in ['cheer', 'clap']:
+                # 音声エフェクト: マイクありユーザー数を分母に
+                if num_microphone_users > 0:
+                    density_event[event_name] = total / (num_microphone_users * window_seconds)
+                else:
+                    density_event[event_name] = 0.0
+            else:
+                # その他のエフェクト: 全ユーザー数を分母に
+                density_event[event_name] = total / (num_active_users * window_seconds)
+
+        print(f"  📈 density_event: {density_event} (マイクあり: {num_microphone_users}/{num_active_users})")
         
         # ========================
         # エフェクト判定（優先順位付き）

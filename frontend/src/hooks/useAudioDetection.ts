@@ -10,6 +10,7 @@ interface AudioDebugInfo {
   volumeThreshold: number;  // 歓声の閾値
   isActive: boolean;        // マイク有効/無効
   error: string | null;     // エラーメッセージ
+  hasMicrophone: boolean;   // マイク許可状態
 }
 
 interface UseAudioDetectionReturn {
@@ -18,6 +19,7 @@ interface UseAudioDetectionReturn {
   resetEvents: () => void;
   startAudio: () => Promise<void>;
   stopAudio: () => void;
+  hasMicrophone: boolean;   // マイク許可状態
 }
 
 /**
@@ -33,7 +35,8 @@ export const useAudioDetection = (): UseAudioDetectionReturn => {
     volume: 0,
     volumeThreshold: 0.2,
     isActive: false,
-    error: null
+    error: null,
+    hasMicrophone: false
   });
 
   // Web Audio API関連のref
@@ -208,7 +211,8 @@ export const useAudioDetection = (): UseAudioDetectionReturn => {
       setDebugInfo(prev => ({
         ...prev,
         isActive: true,
-        error: null
+        error: null,
+        hasMicrophone: true
       }));
 
       console.log('✅ マイク開始成功');
@@ -221,7 +225,8 @@ export const useAudioDetection = (): UseAudioDetectionReturn => {
       setDebugInfo(prev => ({
         ...prev,
         isActive: false,
-        error: error instanceof Error ? error.message : 'マイクアクセスに失敗しました'
+        error: error instanceof Error ? error.message : 'マイクアクセスに失敗しました',
+        hasMicrophone: false
       }));
     }
   }, [analyzeAudio]);
@@ -284,6 +289,7 @@ export const useAudioDetection = (): UseAudioDetectionReturn => {
     debugInfo,
     resetEvents,
     startAudio,
-    stopAudio
+    stopAudio,
+    hasMicrophone: debugInfo.hasMicrophone
   };
 };

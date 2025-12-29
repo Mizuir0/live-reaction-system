@@ -28,6 +28,7 @@ export interface ReactionData {
   events: ReactionEvents;
   videoTime?: number; // 動画の現在時刻（秒）
   sessionId?: string; // セッションID
+  hasMicrophone?: boolean; // マイク許可状態
 }
 
 // デバッグ用の検出情報

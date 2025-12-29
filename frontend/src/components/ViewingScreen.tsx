@@ -15,13 +15,14 @@ export type ExperimentGroup = 'experiment' | 'control1' | 'control2' | 'debug';
 interface ViewingScreenProps {
   videoId: string | undefined;
   userId: string;
+  onComplete?: (completionCode: string) => void;
 }
 
 /**
  * 視聴画面コンポーネント
  * YouTube プレイヤー、Canvas エフェクト領域、ステータス表示を含む
  */
-const ViewingScreen: React.FC<ViewingScreenProps> = ({ videoId, userId }) => {
+const ViewingScreen: React.FC<ViewingScreenProps> = ({ videoId, userId, onComplete }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const playerRef = useRef<any>(null); // YouTubeプレーヤーのref
   const [playerReady, setPlayerReady] = useState(false);
@@ -35,6 +36,7 @@ const ViewingScreen: React.FC<ViewingScreenProps> = ({ videoId, userId }) => {
     return `${userId}_${Date.now()}`;
   });
   const sessionCreatedRef = useRef(false); // セッション作成済みフラグ
+  const [completionCode, setCompletionCode] = useState<string>(''); // 完了コード
 
   // URLからグループとホスト判定を取得
   const getExperimentGroup = (): ExperimentGroup => {
@@ -99,7 +101,8 @@ const ViewingScreen: React.FC<ViewingScreenProps> = ({ videoId, userId }) => {
     videoSyncEvent,
     connectionCount,
     timeSyncRequest,
-    timeSyncResponse
+    timeSyncResponse,
+    lastResponse
   } = useWebSocket(userId, experimentGroup, isHost);
 
   // エフェクトレンダラー
@@ -219,6 +222,14 @@ const ViewingScreen: React.FC<ViewingScreenProps> = ({ videoId, userId }) => {
     };
   }, [wsConnected, sendReactionData, isPlaying]); // isPlayingも依存配列に追加
 
+  // セッション作成レスポンスから完了コードを受信
+  useEffect(() => {
+    if (lastResponse && lastResponse.type === 'session_created' && lastResponse.completionCode) {
+      setCompletionCode(lastResponse.completionCode);
+      console.log('✅ 完了コード受信:', lastResponse.completionCode);
+    }
+  }, [lastResponse]);
+
   useEffect(() => {
     // Canvas の初期化（後のステップで描画処理を追加）
     const canvas = canvasRef.current;
@@ -286,6 +297,10 @@ const ViewingScreen: React.FC<ViewingScreenProps> = ({ videoId, userId }) => {
     if (event.data === 0) {
       console.log('動画が終了しました');
       sendSessionCompleted(sessionId);
+      // 完了画面に遷移
+      if (onComplete && completionCode) {
+        onComplete(completionCode);
+      }
     }
 
     // experiment群のホストの場合、再生/一時停止をWebSocketで同期

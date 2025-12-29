@@ -54,12 +54,17 @@ def create_session(session_id: str, user_id: str, video_id: str, experiment_grou
         cursor = conn.cursor()
         started_at = int(time.time() * 1000)
 
+        # 完了コードを生成（6文字の英数字）
+        completion_code = ''.join(random.choices('ABCDEFGHJKLMNPQRSTUVWXYZ23456789', k=6))
+
         cursor.execute("""
-            INSERT INTO sessions (session_id, user_id, video_id, experiment_group, started_at, is_completed)
-            VALUES (%s, %s, %s, %s, %s, %s)
-        """, (session_id, user_id, video_id, experiment_group, started_at, False))
+            INSERT INTO sessions (session_id, user_id, video_id, experiment_group, started_at, is_completed, completion_code)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+        """, (session_id, user_id, video_id, experiment_group, started_at, False, completion_code))
         conn.commit()
-        print(f"✅ セッション作成: {session_id} (user: {user_id}, video: {video_id})")
+        print(f"✅ セッション作成: {session_id} (user: {user_id}, video: {video_id}, code: {completion_code})")
+
+        return completion_code
 
 def complete_session(session_id: str):
     """セッションを完了としてマーク"""
@@ -618,10 +623,11 @@ async def websocket_endpoint(websocket: WebSocket):
                 video_id = data.get('videoId', '')
                 if session_id:
                     try:
-                        create_session(session_id, user_id, video_id, experiment_group)
+                        completion_code = create_session(session_id, user_id, video_id, experiment_group)
                         await websocket.send_json({
                             "type": "session_created",
                             "sessionId": session_id,
+                            "completionCode": completion_code,
                             "timestamp": int(time.time() * 1000)
                         })
                     except Exception as e:

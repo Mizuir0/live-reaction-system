@@ -302,6 +302,29 @@ def init_database():
         except Exception as e:
             print(f"ℹ️ effects_log session_idマイグレーション: {e}")
 
+        # sessionsテーブルにcompletion_codeカラムを追加（マイグレーション）
+        try:
+            if DB_TYPE == "postgresql":
+                cursor.execute("""
+                    SELECT column_name FROM information_schema.columns
+                    WHERE table_name='sessions' AND column_name='completion_code'
+                """)
+            else:
+                cursor.execute("PRAGMA table_info(sessions)")
+
+            columns = cursor.fetchall()
+            has_completion_code = False
+            if DB_TYPE == "postgresql":
+                has_completion_code = len(columns) > 0
+            else:
+                has_completion_code = any(col[1] == 'completion_code' for col in columns)
+
+            if not has_completion_code:
+                cursor.execute("ALTER TABLE sessions ADD COLUMN completion_code TEXT")
+                print("✅ sessionsテーブルにcompletion_codeカラムを追加しました")
+        except Exception as e:
+            print(f"ℹ️ sessions completion_codeマイグレーション: {e}")
+
         conn.commit()
 
     print("=" * 60)

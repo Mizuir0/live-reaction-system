@@ -3,10 +3,11 @@ import './App.css';
 import InitialScreen from './components/InitialScreen';
 import CameraCheckScreen from './components/CameraCheckScreen';
 import ViewingScreen from './components/ViewingScreen';
+import CompletionScreen from './components/CompletionScreen';
 import { getUserId } from './utils/userIdManager';
 import { useWebSocket } from './hooks/useWebSockets';
 
-type Screen = 'initial' | 'waiting' | 'camera_check' | 'viewing';
+type Screen = 'initial' | 'waiting' | 'camera_check' | 'viewing' | 'completion';
 type ExperimentGroup = 'experiment' | 'control1' | 'control2' | 'debug';
 
 // URLパラメータを取得する関数
@@ -33,6 +34,7 @@ function App() {
   const [experimentGroup] = useState<ExperimentGroup>(initialGroup);
   const [isHost] = useState<boolean>(initialIsHost);
   const [isReady, setIsReady] = useState<boolean>(false); // 準備完了フラグ
+  const [completionCode, setCompletionCode] = useState<string>(''); // 完了コード
 
   console.log(`実験グループ: ${experimentGroup}, ホスト: ${isHost}`);
 
@@ -106,11 +108,21 @@ function App() {
   };
 
   /**
+   * 視聴完了ハンドラ
+   */
+  const handleViewingComplete = (code: string) => {
+    setCompletionCode(code);
+    setCurrentScreen('completion');
+    console.log('完了画面に遷移 - Code:', code);
+  };
+
+  /**
    * 初期画面に戻るハンドラ（デバッグ用）
    */
   const handleBackToInitial = () => {
     setCurrentScreen('initial');
     setVideoId('');
+    setCompletionCode('');
     console.log('初期画面に戻りました');
   };
 
@@ -184,7 +196,19 @@ function App() {
       )}
 
       {currentScreen === 'viewing' && (
-        <ViewingScreen videoId={videoId} userId={userId} />
+        <ViewingScreen
+          videoId={videoId}
+          userId={userId}
+          onComplete={handleViewingComplete}
+        />
+      )}
+
+      {currentScreen === 'completion' && (
+        <CompletionScreen
+          completionCode={completionCode}
+          surveyUrl="https://forms.google.com/"
+          onBackToInitial={handleBackToInitial}
+        />
       )}
 
       {/* デバッグ用：画面切り替えボタン（開発中のみ表示） */}

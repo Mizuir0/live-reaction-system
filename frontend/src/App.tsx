@@ -89,12 +89,19 @@ function App() {
   }, [experimentGroup, isHost]);
 
   /**
-   * 視聴開始ハンドラ（動画選択後、カメラチェック画面へ）
+   * 視聴開始ハンドラ（動画選択後の遷移）
    */
   const handleStartViewing = (newVideoId: string) => {
     setVideoId(newVideoId);
-    setCurrentScreen('camera_check');
-    console.log('カメラチェック画面に遷移 - Video ID:', newVideoId);
+
+    // ホストはカメラチェックをスキップして直接視聴画面へ
+    if (isHost) {
+      setCurrentScreen('viewing');
+      console.log('視聴画面に遷移（ホスト） - Video ID:', newVideoId);
+    } else {
+      setCurrentScreen('camera_check');
+      console.log('カメラチェック画面に遷移 - Video ID:', newVideoId);
+    }
 
     // experiment群のホストの場合、動画URL選択をブロードキャスト
     if (experimentGroup === 'experiment' && isHost) {

@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import './App.css';
 import InitialScreen from './components/InitialScreen';
+import CameraCheckScreen from './components/CameraCheckScreen';
 import ViewingScreen from './components/ViewingScreen';
 import { getUserId } from './utils/userIdManager';
 import { useWebSocket } from './hooks/useWebSockets';
 
-type Screen = 'initial' | 'waiting' | 'viewing';
+type Screen = 'initial' | 'waiting' | 'camera_check' | 'viewing';
 type ExperimentGroup = 'experiment' | 'control1' | 'control2' | 'debug';
 
 // URLパラメータを取得する関数
@@ -82,18 +83,26 @@ function App() {
   }, [experimentGroup, isHost]);
 
   /**
-   * 視聴開始ハンドラ
+   * 視聴開始ハンドラ（動画選択後、カメラチェック画面へ）
    */
   const handleStartViewing = (newVideoId: string) => {
     setVideoId(newVideoId);
-    setCurrentScreen('viewing');
-    console.log('視聴画面に遷移 - Video ID:', newVideoId);
+    setCurrentScreen('camera_check');
+    console.log('カメラチェック画面に遷移 - Video ID:', newVideoId);
 
     // experiment群のホストの場合、動画URL選択をブロードキャスト
     if (experimentGroup === 'experiment' && isHost) {
       sendVideoUrlSelected(newVideoId);
       console.log('📺 動画URL選択をブロードキャスト:', newVideoId);
     }
+  };
+
+  /**
+   * カメラチェック完了ハンドラ
+   */
+  const handleCameraReady = () => {
+    setCurrentScreen('viewing');
+    console.log('視聴画面に遷移');
   };
 
   /**
@@ -165,6 +174,13 @@ function App() {
             </p>
           </div>
         </div>
+      )}
+
+      {currentScreen === 'camera_check' && (
+        <CameraCheckScreen
+          onReady={handleCameraReady}
+          onBack={handleBackToInitial}
+        />
       )}
 
       {currentScreen === 'viewing' && (

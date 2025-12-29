@@ -58,15 +58,19 @@ function App() {
       console.log('📺 ホストが選択した動画を受信:', videoUrlSelectedEvent.videoId);
       setVideoId(videoUrlSelectedEvent.videoId);
 
+      // カメラチェック中は画面遷移しない（videoIdだけ設定）
+      if (currentScreen === 'camera_check') {
+        console.log('📷 カメラチェック中 - videoIdのみ設定');
+      }
       // 準備完了している場合のみ画面遷移
-      if (isReady) {
+      else if (isReady && currentScreen === 'waiting') {
         console.log('✅ 準備完了済み - 視聴画面に遷移');
         setCurrentScreen('viewing');
       } else {
         console.log('⏳ 準備未完了 - 待機画面を維持');
       }
     }
-  }, [videoUrlSelectedEvent, experimentGroup, isHost, isReady]);
+  }, [videoUrlSelectedEvent, experimentGroup, isHost, isReady, currentScreen]);
 
   // 準備完了後にvideoIdが設定されている場合は画面遷移
   useEffect(() => {
@@ -103,8 +107,20 @@ function App() {
    * カメラチェック完了ハンドラ
    */
   const handleCameraReady = () => {
-    setCurrentScreen('viewing');
-    console.log('視聴画面に遷移');
+    // experiment群の参加者の場合、videoIdがあればviewing、なければwaiting
+    if (experimentGroup === 'experiment' && !isHost) {
+      if (videoId) {
+        setCurrentScreen('viewing');
+        console.log('視聴画面に遷移');
+      } else {
+        setCurrentScreen('waiting');
+        setIsReady(true);
+        console.log('待機画面に戻ります（カメラチェック完了）');
+      }
+    } else {
+      setCurrentScreen('viewing');
+      console.log('視聴画面に遷移');
+    }
   };
 
   /**
@@ -153,8 +169,8 @@ function App() {
               <button
                 onClick={() => {
                   if (!isReady) {
-                    console.log('✅ 準備完了ボタンがクリックされました');
-                    setIsReady(true);
+                    console.log('✅ 準備完了ボタンがクリックされました - カメラチェック画面に遷移');
+                    setCurrentScreen('camera_check');
                   }
                 }}
                 style={{

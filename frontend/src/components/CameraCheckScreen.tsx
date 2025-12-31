@@ -13,10 +13,37 @@ const CameraCheckScreen: React.FC<CameraCheckScreenProps> = ({ onReady, onBack }
   const [poseDetected, setPoseDetected] = useState(false);
   const [cameraReady, setCameraReady] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const animationFrameRef = useRef<number | null>(null);
 
   // MediaPipeフックを使用
   const { detectAll, isReady: mediaPipeReady, error: mediaPipeError } = useMediaPipe();
+
+  // 全画面状態を監視
+  useEffect(() => {
+    const checkFullscreen = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+
+    // 初期状態をチェック
+    checkFullscreen();
+
+    // 全画面変更イベントを監視
+    document.addEventListener('fullscreenchange', checkFullscreen);
+
+    return () => {
+      document.removeEventListener('fullscreenchange', checkFullscreen);
+    };
+  }, []);
+
+  // 全画面をリクエスト
+  const requestFullscreen = async () => {
+    try {
+      await document.documentElement.requestFullscreen();
+    } catch (err) {
+      console.error('全画面表示エラー:', err);
+    }
+  };
 
   // カメラを起動
   useEffect(() => {
@@ -96,7 +123,7 @@ const CameraCheckScreen: React.FC<CameraCheckScreenProps> = ({ onReady, onBack }
     };
   }, [cameraReady, mediaPipeReady, detectLoop]);
 
-  const allDetected = faceDetected && poseDetected && cameraReady;
+  const allDetected = faceDetected && poseDetected && cameraReady && isFullscreen;
 
   return (
     <div style={styles.container}>
@@ -123,6 +150,15 @@ const CameraCheckScreen: React.FC<CameraCheckScreenProps> = ({ onReady, onBack }
 
         {/* 検出状態の表示 */}
         <div style={styles.statusContainer}>
+          <div style={styles.statusItem}>
+            <span style={styles.statusIcon}>
+              {isFullscreen ? '✅' : '❌'}
+            </span>
+            <span style={styles.statusText}>
+              全画面表示: {isFullscreen ? '有効' : '無効'}
+            </span>
+          </div>
+
           <div style={styles.statusItem}>
             <span style={styles.statusIcon}>
               {cameraReady ? '✅' : '⏳'}
@@ -158,11 +194,30 @@ const CameraCheckScreen: React.FC<CameraCheckScreenProps> = ({ onReady, onBack }
           </div>
         )}
 
+        {/* 全画面表示の警告 */}
+        {!isFullscreen && (
+          <div style={styles.fullscreenWarning}>
+            <p style={styles.fullscreenWarningTitle}>🖥️ 全画面表示が必要です</p>
+            <p style={styles.fullscreenWarningText}>
+              実験を開始するには、全画面表示にしてください。
+            </p>
+            <button
+              onClick={requestFullscreen}
+              style={styles.fullscreenButton}
+            >
+              全画面表示にする
+            </button>
+          </div>
+        )}
+
         {/* ヒント */}
         {!allDetected && cameraReady && (
           <div style={styles.hintContainer}>
             <p style={styles.hintTitle}>💡 ヒント:</p>
             <ul style={styles.hintList}>
+              {!isFullscreen && (
+                <li>上の「全画面表示にする」ボタンをクリックしてください</li>
+              )}
               {!faceDetected && (
                 <li>カメラに顔が映るように調整してください</li>
               )}
@@ -280,6 +335,36 @@ const styles: { [key: string]: React.CSSProperties } = {
   errorText: {
     color: '#ff6b6b',
     margin: 0
+  },
+  fullscreenWarning: {
+    marginBottom: '20px',
+    padding: '20px',
+    backgroundColor: 'rgba(255, 165, 0, 0.1)',
+    borderRadius: '12px',
+    border: '2px solid rgba(255, 165, 0, 0.5)'
+  },
+  fullscreenWarningTitle: {
+    fontSize: '20px',
+    fontWeight: 'bold',
+    color: '#ffa500',
+    marginBottom: '10px'
+  },
+  fullscreenWarningText: {
+    fontSize: '16px',
+    color: '#ccc',
+    marginBottom: '15px'
+  },
+  fullscreenButton: {
+    padding: '12px 24px',
+    fontSize: '16px',
+    fontWeight: 'bold',
+    color: 'white',
+    backgroundColor: '#ffa500',
+    border: 'none',
+    borderRadius: '8px',
+    cursor: 'pointer',
+    transition: 'all 0.3s',
+    boxShadow: '0 4px 8px rgba(255, 165, 0, 0.4)'
   },
   hintContainer: {
     marginBottom: '30px',

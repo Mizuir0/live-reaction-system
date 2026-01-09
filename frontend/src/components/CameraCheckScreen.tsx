@@ -22,17 +22,30 @@ const CameraCheckScreen: React.FC<CameraCheckScreenProps> = ({ onReady, onBack }
   // 全画面状態を監視
   useEffect(() => {
     const checkFullscreen = () => {
-      setIsFullscreen(!!document.fullscreenElement);
+      // Fullscreen API による全画面（Safari対応）
+      const fullscreenElement = document.fullscreenElement ||
+        (document as unknown as { webkitFullscreenElement?: Element }).webkitFullscreenElement;
+
+      // F11やブラウザの全画面ボタンによる全画面（ウィンドウサイズで判定）
+      const isFullscreenBySize = window.innerWidth >= screen.width - 10 &&
+                                  window.innerHeight >= screen.height - 10;
+
+      setIsFullscreen(!!fullscreenElement || isFullscreenBySize);
     };
 
     // 初期状態をチェック
     checkFullscreen();
 
-    // 全画面変更イベントを監視
+    // 全画面変更イベントを監視（Safari対応）
     document.addEventListener('fullscreenchange', checkFullscreen);
+    document.addEventListener('webkitfullscreenchange', checkFullscreen);
+    // F11などによる全画面はresizeイベントで検知
+    window.addEventListener('resize', checkFullscreen);
 
     return () => {
       document.removeEventListener('fullscreenchange', checkFullscreen);
+      document.removeEventListener('webkitfullscreenchange', checkFullscreen);
+      window.removeEventListener('resize', checkFullscreen);
     };
   }, []);
 

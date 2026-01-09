@@ -759,8 +759,8 @@ const styles: { [key: string]: React.CSSProperties } = {
   },
   playerWrapper: {
     position: 'relative',
-    width: '100%',
-    height: '100%',
+    width: '80vw',
+    height: '70vh',
     maxWidth: '1280px',
     maxHeight: '720px',
     zIndex: 2

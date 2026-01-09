@@ -142,125 +142,111 @@ const CameraCheckScreen: React.FC<CameraCheckScreenProps> = ({ onReady, onBack }
     <div style={styles.container}>
       <div style={styles.content}>
         <h1 style={styles.title}>カメラ確認</h1>
-        <p style={styles.subtitle}>
-          顔と体が認識されているか確認してください
-        </p>
 
-        {/* カメラプレビュー */}
-        <div style={styles.videoContainer}>
-          <video
-            ref={videoRef}
-            style={styles.video}
-            autoPlay
-            playsInline
-            muted
-          />
-          <canvas
-            ref={canvasRef}
-            style={styles.canvas}
-          />
-        </div>
-
-        {/* 検出状態の表示 */}
-        <div style={styles.statusContainer}>
-          <div style={styles.statusItem}>
-            <span style={styles.statusIcon}>
-              {isFullscreen ? '✅' : '❌'}
-            </span>
-            <span style={styles.statusText}>
-              全画面表示: {isFullscreen ? '有効' : '無効'}
-            </span>
+        <div style={styles.mainLayout}>
+          {/* 左側: カメラプレビュー */}
+          <div style={styles.leftPanel}>
+            <div style={styles.videoContainer}>
+              <video
+                ref={videoRef}
+                style={styles.video}
+                autoPlay
+                playsInline
+                muted
+              />
+              <canvas
+                ref={canvasRef}
+                style={styles.canvas}
+              />
+            </div>
           </div>
 
-          <div style={styles.statusItem}>
-            <span style={styles.statusIcon}>
-              {cameraReady ? '✅' : '⏳'}
-            </span>
-            <span style={styles.statusText}>
-              カメラ: {cameraReady ? '起動済み' : '起動中...'}
-            </span>
-          </div>
-
-          <div style={styles.statusItem}>
-            <span style={styles.statusIcon}>
-              {faceDetected ? '✅' : '❌'}
-            </span>
-            <span style={styles.statusText}>
-              顔の検出: {faceDetected ? '検出されています' : '検出されていません'}
-            </span>
-          </div>
-
-          <div style={styles.statusItem}>
-            <span style={styles.statusIcon}>
-              {poseDetected ? '✅' : '❌'}
-            </span>
-            <span style={styles.statusText}>
-              体の検出: {poseDetected ? '検出されています' : '検出されていません'}
-            </span>
-          </div>
-        </div>
-
-        {/* エラー表示 */}
-        {(cameraError || mediaPipeError) && (
-          <div style={styles.errorContainer}>
-            <p style={styles.errorText}>⚠️ {cameraError || mediaPipeError}</p>
-          </div>
-        )}
-
-        {/* 全画面表示の警告 */}
-        {!isFullscreen && (
-          <div style={styles.fullscreenWarning}>
-            <p style={styles.fullscreenWarningTitle}>🖥️ 全画面表示が必要です</p>
-            <p style={styles.fullscreenWarningText}>
-              実験を開始するには、全画面表示にしてください。
+          {/* 右側: チェック項目とボタン */}
+          <div style={styles.rightPanel}>
+            <p style={styles.subtitle}>
+              顔と体が認識されているか確認してください
             </p>
-            <button
-              onClick={requestFullscreen}
-              style={styles.fullscreenButton}
-            >
-              全画面表示にする
-            </button>
+
+            {/* 検出状態の表示 */}
+            <div style={styles.statusContainer}>
+              <div style={styles.statusItem}>
+                <span style={styles.statusIcon}>
+                  {isFullscreen ? '✅' : '❌'}
+                </span>
+                <span style={styles.statusText}>
+                  全画面表示: {isFullscreen ? '有効' : '無効'}
+                </span>
+              </div>
+
+              <div style={styles.statusItem}>
+                <span style={styles.statusIcon}>
+                  {cameraReady ? '✅' : '⏳'}
+                </span>
+                <span style={styles.statusText}>
+                  カメラ: {cameraReady ? '起動済み' : '起動中...'}
+                </span>
+              </div>
+
+              <div style={styles.statusItem}>
+                <span style={styles.statusIcon}>
+                  {faceDetected ? '✅' : '❌'}
+                </span>
+                <span style={styles.statusText}>
+                  顔: {faceDetected ? '検出OK' : '未検出'}
+                </span>
+              </div>
+
+              <div style={styles.statusItem}>
+                <span style={styles.statusIcon}>
+                  {poseDetected ? '✅' : '❌'}
+                </span>
+                <span style={styles.statusText}>
+                  体: {poseDetected ? '検出OK' : '未検出'}
+                </span>
+              </div>
+            </div>
+
+            {/* エラー表示 */}
+            {(cameraError || mediaPipeError) && (
+              <div style={styles.errorContainer}>
+                <p style={styles.errorText}>⚠️ {cameraError || mediaPipeError}</p>
+              </div>
+            )}
+
+            {/* 全画面表示の警告 */}
+            {!isFullscreen && (
+              <div style={styles.fullscreenWarning}>
+                <p style={styles.fullscreenWarningTitle}>🖥️ 全画面表示が必要です</p>
+                <button
+                  onClick={requestFullscreen}
+                  style={styles.fullscreenButton}
+                >
+                  全画面表示にする
+                </button>
+              </div>
+            )}
+
+            {/* ボタン */}
+            <div style={styles.buttonContainer}>
+              <button
+                onClick={onBack}
+                style={styles.backButton}
+              >
+                ← 戻る
+              </button>
+
+              <button
+                onClick={onReady}
+                disabled={!allDetected}
+                style={{
+                  ...styles.readyButton,
+                  ...(allDetected ? styles.readyButtonEnabled : styles.readyButtonDisabled)
+                }}
+              >
+                {allDetected ? '✅ 準備完了' : '⏳ 検出待ち...'}
+              </button>
+            </div>
           </div>
-        )}
-
-        {/* ヒント */}
-        {!allDetected && cameraReady && (
-          <div style={styles.hintContainer}>
-            <p style={styles.hintTitle}>💡 ヒント:</p>
-            <ul style={styles.hintList}>
-              {!isFullscreen && (
-                <li>上の「全画面表示にする」ボタンをクリックしてください</li>
-              )}
-              {!faceDetected && (
-                <li>カメラに顔が映るように調整してください</li>
-              )}
-              {!poseDetected && (
-                <li>上半身全体が映るように少し後ろに下がってください</li>
-              )}
-              <li>明るい場所で使用してください</li>
-            </ul>
-          </div>
-        )}
-
-        {/* ボタン */}
-        <div style={styles.buttonContainer}>
-          <button
-            onClick={onBack}
-            style={styles.backButton}
-          >
-            ← 戻る
-          </button>
-
-          <button
-            onClick={onReady}
-            disabled={!allDetected}
-            style={{
-              ...styles.readyButton,
-              ...(allDetected ? styles.readyButtonEnabled : styles.readyButtonDisabled)
-            }}
-          >
-            {allDetected ? '✅ 準備完了' : '⏳ 検出待ち...'}
-          </button>
         </div>
       </div>
     </div>
@@ -271,33 +257,44 @@ const styles: { [key: string]: React.CSSProperties } = {
   container: {
     display: 'flex',
     justifyContent: 'center',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     minHeight: '100vh',
     backgroundColor: '#1a1a1a',
     color: 'white',
     padding: '20px',
-    overflow: 'auto'
+    boxSizing: 'border-box'
   },
   content: {
     width: '100%',
-    maxWidth: '800px',
-    textAlign: 'center'
+    maxWidth: '1200px'
   },
   title: {
-    fontSize: '32px',
+    fontSize: '24px',
     fontWeight: 'bold',
-    marginBottom: '10px'
+    marginBottom: '15px',
+    textAlign: 'center'
+  },
+  mainLayout: {
+    display: 'flex',
+    gap: '30px',
+    alignItems: 'flex-start'
+  },
+  leftPanel: {
+    flex: '1 1 50%',
+    minWidth: '300px'
+  },
+  rightPanel: {
+    flex: '1 1 50%',
+    minWidth: '280px'
   },
   subtitle: {
-    fontSize: '18px',
+    fontSize: '16px',
     color: '#ccc',
-    marginBottom: '30px'
+    marginBottom: '15px'
   },
   videoContainer: {
     position: 'relative',
     width: '100%',
-    maxWidth: '640px',
-    margin: '0 auto 30px',
     backgroundColor: '#000',
     borderRadius: '12px',
     overflow: 'hidden',
@@ -320,107 +317,110 @@ const styles: { [key: string]: React.CSSProperties } = {
   statusContainer: {
     display: 'flex',
     flexDirection: 'column',
-    gap: '15px',
-    marginBottom: '30px',
-    padding: '20px',
+    gap: '8px',
+    marginBottom: '15px',
+    padding: '12px',
     backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    borderRadius: '12px'
+    borderRadius: '8px'
   },
   statusItem: {
     display: 'flex',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: '10px',
-    fontSize: '18px'
+    justifyContent: 'flex-start',
+    gap: '8px',
+    fontSize: '14px'
   },
   statusIcon: {
-    fontSize: '24px'
+    fontSize: '18px'
   },
   statusText: {
     fontWeight: '500'
   },
   errorContainer: {
-    marginBottom: '20px',
-    padding: '15px',
+    marginBottom: '12px',
+    padding: '10px',
     backgroundColor: 'rgba(255, 0, 0, 0.1)',
     borderRadius: '8px',
     border: '1px solid rgba(255, 0, 0, 0.3)'
   },
   errorText: {
     color: '#ff6b6b',
-    margin: 0
+    margin: 0,
+    fontSize: '14px'
   },
   fullscreenWarning: {
-    marginBottom: '20px',
-    padding: '20px',
+    marginBottom: '15px',
+    padding: '12px',
     backgroundColor: 'rgba(255, 165, 0, 0.1)',
-    borderRadius: '12px',
+    borderRadius: '8px',
     border: '2px solid rgba(255, 165, 0, 0.5)'
   },
   fullscreenWarningTitle: {
-    fontSize: '20px',
+    fontSize: '16px',
     fontWeight: 'bold',
     color: '#ffa500',
-    marginBottom: '10px'
+    marginBottom: '8px'
   },
   fullscreenWarningText: {
-    fontSize: '16px',
+    fontSize: '14px',
     color: '#ccc',
-    marginBottom: '15px'
+    marginBottom: '10px'
   },
   fullscreenButton: {
-    padding: '12px 24px',
-    fontSize: '16px',
+    padding: '10px 20px',
+    fontSize: '14px',
     fontWeight: 'bold',
     color: 'white',
     backgroundColor: '#ffa500',
     border: 'none',
-    borderRadius: '8px',
+    borderRadius: '6px',
     cursor: 'pointer',
     transition: 'all 0.3s',
-    boxShadow: '0 4px 8px rgba(255, 165, 0, 0.4)'
+    boxShadow: '0 2px 6px rgba(255, 165, 0, 0.4)'
   },
   hintContainer: {
-    marginBottom: '30px',
-    padding: '20px',
+    marginBottom: '15px',
+    padding: '12px',
     backgroundColor: 'rgba(76, 175, 80, 0.1)',
-    borderRadius: '12px',
+    borderRadius: '8px',
     textAlign: 'left'
   },
   hintTitle: {
-    fontSize: '18px',
+    fontSize: '14px',
     fontWeight: 'bold',
-    marginBottom: '10px',
+    marginBottom: '6px',
     color: '#4CAF50'
   },
   hintList: {
     margin: 0,
-    paddingLeft: '20px',
-    lineHeight: '1.8'
+    paddingLeft: '16px',
+    lineHeight: '1.6',
+    fontSize: '13px'
   },
   buttonContainer: {
     display: 'flex',
     justifyContent: 'center',
-    gap: '20px'
+    gap: '12px',
+    marginTop: '10px'
   },
   backButton: {
-    padding: '14px 28px',
-    fontSize: '16px',
+    padding: '10px 20px',
+    fontSize: '14px',
     fontWeight: 'bold',
     color: 'white',
     backgroundColor: '#666',
     border: 'none',
-    borderRadius: '8px',
+    borderRadius: '6px',
     cursor: 'pointer',
     transition: 'background-color 0.3s'
   },
   readyButton: {
-    padding: '14px 28px',
-    fontSize: '16px',
+    padding: '10px 20px',
+    fontSize: '14px',
     fontWeight: 'bold',
     color: 'white',
     border: 'none',
-    borderRadius: '8px',
+    borderRadius: '6px',
     cursor: 'pointer',
     transition: 'all 0.3s'
   },

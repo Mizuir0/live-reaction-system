@@ -271,11 +271,12 @@ const styles: { [key: string]: React.CSSProperties } = {
   container: {
     display: 'flex',
     justifyContent: 'center',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     minHeight: '100vh',
     backgroundColor: '#1a1a1a',
     color: 'white',
-    padding: '20px'
+    padding: '20px',
+    overflow: 'auto'
   },
   content: {
     width: '100%',
